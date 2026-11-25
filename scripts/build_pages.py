@@ -39,6 +39,12 @@ def build(output, cache):
 
     def retrieve(name):
         expected = manifest[name]
+        bundled = ROOT / 'release-files' / name
+        if bundled.is_file():
+            data = bundled.read_bytes()
+            if digest(data) != expected:
+                raise ValueError('Bundled release hash mismatch: ' + name)
+            return name, data
         cached = cache / expected
         if cached.is_file() and digest(cached.read_bytes()) == expected:
             return name, cached.read_bytes()

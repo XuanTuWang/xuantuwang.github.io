@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG 与图记忆 · Agent 概论</title>
+<meta name="description" content="从分块到重排的完整检索链路。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#先找依据再把答案写出来">先找依据，再把答案写出来</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="rag-and-graph" data-part="p1">
+    <p class="crumb"><a href="index.html">目录</a> / 行动 / 第 9 章</p>
+    <div class="prose-body">
+<h1>RAG 与图记忆</h1>
+<p>如果商家把退货期限从 14 天改为 30 天，模型凭记忆回答，可能仍说 14 天，也可能弄错起算日。回答前先查当前条款，就有了可以核对的依据。</p>
+<p>打个比方，<abbr class="term" tabindex="0" title="检索增强生成（Retrieval-Augmented Generation，RAG）：先检索与问题有关的材料，再把证据交给模型生成回答。还要核对版本、适用范围和答案是否被证据支持。" data-tip="检索增强生成（Retrieval-Augmented Generation，RAG）：先检索与问题有关的材料，再把证据交给模型生成回答。还要核对版本、适用范围和答案是否被证据支持。">检索增强生成<span class="term-en">（Retrieval-Augmented Generation）</span></abbr>像开卷考试。模型不必把所有政策背在脑子里，答题前先把相关条款从资料柜里翻出来摊在桌上，再照着材料作答。</p>
+<p><strong>正式定义</strong>：检索增强生成（RAG）先检索与问题有关的材料，把证据放进本次输入，再交给模型作答。英文是 Retrieval-Augmented Generation。回答还要核对版本和适用范围，确认结论能被证据支撑。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-09/panel-1.webp" alt="第 9 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：我记得是这样。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-09/panel-2.webp" alt="第 9 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：先把档案调出来，我们一起看证据。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-09/panel-3.webp" alt="第 9 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：检索、重排，再把两条事实连起来。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-09/panel-4.webp" alt="第 9 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：回答要有证据链。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>检索增强生成（Retrieval-Augmented Generation，RAG）让回答用上外部资料。系统先整理文档，再按当前问题找出相关片段，交给模型参考。它分两段：离线建库，把文档切块、编码（把文本变成一串数字，也就是<abbr class="term" tabindex="0" title="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。" data-tip="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。">向量<span class="term-en">（Vector）</span></abbr>）、建索引；在线查询，按问题过滤、召回（先把可能相关的块捞回来）、<abbr class="term" tabindex="0" title="重排（Reranking）：先粗筛出一批候选，再用更贵的模型逐条打分排序。" data-tip="重排（Reranking）：先粗筛出一批候选，再用更贵的模型逐条打分排序。">重排<span class="term-en">（Reranking）</span></abbr>，再交给模型生成。关键词检索擅长型号和编号，向量检索擅长同义改写，两路结果可以融合后重排。</p>
+<p>重排只改候选的先后；没被召回的证据进不了重排。只有关系本身是问题的一部分、需要沿多条边查找时，才值得引入图结构。</p>
+<h2 id="先找依据再把答案写出来">先找依据，再把答案写出来</h2>
+<p>用户问一台设备能保修多久。语言模型可以生成一个常见期限，但具体设备可能适用不同版本的政策。RAG 先把相关材料找出来，再让模型基于材料组织答案。答案好不好，首先取决于找到的材料对不对、是不是当前版本。</p>
+<p>把系统想成一座图书馆：小运是运行程序，负责在资料入库时建索引；有人问起设备保修，它再按问题找出相关页。小模是语言模型，负责阅读这些页、组织答案。出处由小运按检索结果附上并核对编号，小模在答案里说明用了哪条证据。建索引发生在资料准备时，找证据发生在提问之后。</p>
+<h3 id="一条日期为什么需要上下文">一条日期为什么需要上下文</h3>
+<p>这里的“<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>”指一条规则的相邻文字；模型的<abbr class="term" tabindex="0" title="上下文窗口（Context Window）：一次调用可使用的序列长度上限，通常以词元计。输入与生成输出是否共用限额，要按模型和服务约定核对。" data-tip="上下文窗口（Context Window）：一次调用可使用的序列长度上限，通常以词元计。输入与生成输出是否共用限额，要按模型和服务约定核对。">上下文窗口<span class="term-en">（Context Window）</span></abbr>是另一回事。假设切下来的纸片只写“旧版十四天”，读者无法判断它说的是退货、维修还是预约有效期。保留标题、适用对象、版本和必要的相邻段落，才能把数字解释正确。分块的目标，是保存一个能独立读懂的证据单位。</p>
+<p>向量检索能找到意思相近、措辞不同的文本，也可能把“允许退货”和“禁止退货”排得很近，因为两者主题相似。型号、版本和否定词要靠元数据过滤挡住错版本，再由模型逐条读证据、确认否定词和适用范围。</p>
+<p>如果找到两条冲突政策，先看生效时间、失效时间和适用范围；索引里没有这些字段，就查不到该信哪条。无法确定时，把冲突告诉用户。引用只说明答案指向某份材料；材料是否支持结论，还要逐条核对。</p>
+<p>若问“这台设备对应的订单由谁处理”，答案不在一个块里：要沿设备找到订单，再找到处理人。关系少、跳数固定时，关系数据库的 join 也能做；关系类型多、跳数不固定时，图更好组织。每条边都要能追到一条记录，否则这条关系不能拿来回答。</p>
+<p>排查顺序是：答案错，先看材料有没有找对；材料对，再看模型有没有读错。前者改检索和过滤，后者改提示和证据组织。</p>
+<p>下图只保留问题、适用政策和带出处的答案。可以对着条款逐字检查：“2年”是否来自这台设备适用的版本。</p>
+<figure class="teaching-figure"><img src="figures/teach-rag-evidence.svg?v=368bfc259ad5" alt="图 9.1 · 证据、适用范围与答案" loading="lazy" decoding="async"><figcaption>图 9.1 · 证据、适用范围与答案</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>怎样判断这条出处支持答案？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>核对型号、版本和条文适用范围，再看答案中的结论能否从这条证据得到。</p></aside>
+</div></figure>
+<h2 id="机制">机制</h2>
+<h3 id="建库与查询是两段">建库与查询是两段</h3>
+<p>先把链路拆成两段。第一段在源文件变化时执行，只做四步。</p>
+<ol><li>收集源文件，解析成纯文本，去掉页眉页脚和重复段落。</li><li>按固定窗口切块，块与块之间留一段重叠。</li><li>用<abbr class="term" tabindex="0" title="编码器（Encoder）：原始Transformer结构中，将输入序列转换成表示的模块。解码器可以通过交叉注意力读取这些表示；decoder-only结构省去编码器。" data-tip="编码器（Encoder）：原始Transformer结构中，将输入序列转换成表示的模块。解码器可以通过交叉注意力读取这些表示；decoder-only结构省去编码器。">编码器<span class="term-en">（Encoder）</span></abbr>（把文本变成向量的模型）把每块转成向量，同时建立关键词倒排索引（词到出现过的块的反向目录）。</li><li>把向量、原文和元数据写进索引。元数据至少包括产品、版本、来源、访问范围、生效时间和失效时间；访问范围决定谁能用，生效和失效时间决定旧政策会不会被捞出来。</li></ol>
+<p>第二段在问题进来时执行：先按访问范围、版本和生效时间过滤，再召回候选，然后重排，最后把选中的证据交给小模生成回答。引用由小运按候选编号附上；编号在候选里查不到，就判这次回答不合格。</p>
+<figure><img src="figures/14-rag-pipeline.svg?v=6494d9670b3f" alt="图 9.2 · 检索链路：分块到重排" loading="lazy" decoding="async"><figcaption>图 9.2 · 检索链路：分块到重排</figcaption></figure>
+<p>两段的时间尺度不一样。离线建库可能花几分钟到几小时，源文件一改就要重跑；在线查询要在几百毫秒内返回。所以在线段只碰索引，不碰原始文件。也正因为这样，索引过期——源文件改了、索引没重建——是最常见的故障来源之一。</p>
+<h3 id="分块决定证据能不能用">分块决定证据能不能用</h3>
+<p>分块的目标是让每一块单独拿出来也能读懂。一条截止时间规则如果被切断，检索回来只剩一个日期，读这块的模型不知道这个日期属于哪个项目、哪份文件。</p>
+<p>常见的三种切法各有代价。固定窗口按 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr> 数切并留重叠；token 是模型处理文本的长度单位。大小可预测，实现简单，问题是容易切断一条规则。</p>
+<p>结构化切法按标题、段落、句子逐层切，能保住章节结构，问题是大段落还得再切。语义切法在话题变化处断开，块内主题最集中，但需要模型判断边界，成本最高。</p>
+<p>一个具体做法是窗口 400 tokens、重叠 80 tokens。重叠能保留一部分跨界内容。规则足够短时，下一块可能把它完整收进去；长度超过重叠区的规则仍可能被切断，需要按结构补齐。</p>
+<p>代价是索引体积增加约四分之一：窗口 400、步长 320，块数变成 400÷320=1.25 倍。检索时会看到内容重复的候选，去重要看原文位置（文档编号加字符区间），不能只看块编号；块编号每块都不同，去不掉重叠内容。</p>
+<p>好块的判据是局部自洽。块里要有主语和条件，例如「本项目最终报告截止时间为 11 月 27 日 17:00，逾期按天扣分」。只有日期没有主语的块，检索得分再高也没法用。</p>
+<h3 id="关键词与向量各有盲区">关键词与向量各有盲区</h3>
+<p>关键词检索靠字面匹配。它用倒排索引记录每个词出现在哪些块里，查询时按词找块。经典打分函数包括 BM25（Best Matching 25）。它主要看三件事：词频、逆文档频率和长度<abbr class="term" tabindex="0" title="归一化（Normalization）：按约定方式调整数值尺度的操作，例如 LayerNorm 对每个位置的特征做归一化。" data-tip="归一化（Normalization）：按约定方式调整数值尺度的操作，例如 LayerNorm 对每个位置的特征做归一化。">归一化<span class="term-en">（Normalization）</span></abbr>。</p>
+<p>词频越高分越高，但边际递减；越少见的词权重越高；同样命中时，长块会被压低，避免长文靠字数占便宜。</p>
+<p>向量检索靠方向相似。查询和块用同一个编码器映射成向量，再用余弦相似度比较：只看两个向量的夹角，不看长短。余弦值等于点积除以长度乘积，取值从负一到一；越接近 1，方向越一致。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>q</mi><mo separator="true">,</mo><mi>d</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mrow><mi>q</mi><mo>⋅</mo><mi>d</mi></mrow><mrow><mo stretchy="false">∥</mo><mi>q</mi><mo stretchy="false">∥</mo><mtext> </mtext><mo stretchy="false">∥</mo><mi>d</mi><mo stretchy="false">∥</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">\cos(q,d)=\frac{q\cdot d}{\lVert q\rVert\,\lVert d\rVert}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">cos</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">d</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.3074em;vertical-align:-0.936em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">∥</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mclose">∥</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mopen">∥</span><span class="mord mathnormal">d</span><span class="mclose">∥</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>q 是查询向量，d 是文档向量，分子是点积，分母是两个向量的长度乘积。</p>
+<p>举例：查询向量是（1，1，0），块 A 是（1，1，0），余弦为 1。块 B 是（1，0，0），余弦为 0.707；块 C 是（0，0，1），余弦为 0。</p>
+<p>两种检索的盲区正好互补。问「AirPods 断连」，如果讲断连的块确实包含这些词，关键词通常能把它排前，把讲电池保养的排后。问「戴着耳机冲水龙头会不会坏」，文档里可能不出现「水龙头」，关键词对不上，向量更容易靠语义匹配到讲进水的块。但向量对型号和编号不敏感：在常见编码器下，<code>ORD-1002</code> 和 <code>ORD-1003</code> 往往几乎同向量，这是需要实测的风险，具体表现随编码器变化。</p>
+<h3 id="混合检索与重排">混合检索与重排</h3>
+<p>混合检索把两路候选合成一个名单。一种做法叫倒数排名融合（Reciprocal Rank Fusion，RRF）。</p>
+<p>它把各路的名次换成分数，再相加；不同检索器的原始分数无需直接比较。换算时先算 1/(名次+60)，再把两路相加；60 是平滑常数，避免第一名权重过大。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">R</mi><mi mathvariant="normal">R</mi><mi mathvariant="normal">F</mi></mrow><mo stretchy="false">(</mo><mi>d</mi><mo stretchy="false">)</mo><mo>=</mo><munder><mo>∑</mo><mrow><mi>r</mi><mo>∈</mo><mi>R</mi></mrow></munder><mfrac><mn>1</mn><mrow><mn>60</mn><mo>+</mo><msub><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">k</mi></mrow><mi>r</mi></msub><mo stretchy="false">(</mo><mi>d</mi><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">\mathrm{RRF}(d)=\sum_{r\in R}\frac{1}{60+\mathrm{rank}_r(d)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">RRF</span></span><span class="mopen">(</span><span class="mord mathnormal">d</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.6431em;vertical-align:-1.3217em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8557em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mrel mtight">∈</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3217em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">60</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord"><span class="mord mathrm">rank</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">d</span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>R 是参与融合的检索路集合，rank_r(d) 是文档 d 在第 r 路里的名次。名次越靠前，倒数越大。</p>
+<p>举例说明它为什么有用。文档 A 在关键词检索排第 1、在向量检索排第 5；文档 B 在关键词排第 3、在向量排第 2。A 的分数是 1/61 加 1/65，约 0.0318；B 的分数是 1/63 加 1/62，约 0.0320。</p>
+<p>B 两路都不拔尖，但两路都靠前，总分反超了只在关键词一路排第一的 A。</p>
+<p>融合之后还要重排。重排用交叉编码器（cross-encoder）：把问题和候选块拼在一起读，输出一个相关性分数。它通常比向量检索准，因为问题和块在模型内部直接交互过；也更慢，每条候选都要单独过一遍模型，所以只对前十几条做。</p>
+<p>假设召回 40 条，从中取前 15 条重排，每条 8 毫秒，重排就要 120 毫秒。按一次查询 400 毫秒的<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>算，这一步占掉三成。</p>
+<figure><img src="figures/teach-rag-workflow.svg?v=69abd5b73630" alt="图 9.3 · 离线建库与在线查询的完整证据流程" loading="lazy" decoding="async"><figcaption>图 9.3 · 离线建库与在线查询的完整证据流程</figcaption></figure>
+<p>图里把两段各自的位置画得很清楚：左边一段在源文件变化时跑，右边一段在每次提问时跑，中间的索引是两边唯一的交接点。</p>
+<p>过滤要放在检索之前。访问范围、产品型号、文档版本，这些条件决定了哪些证据可用；检索和重排只决定可用证据里谁排前面。政策从 14 天改成 30 天时，旧版本还在索引里，只靠相似度会把两版都捞上来，靠版本和生效时间过滤才能挡住旧版。</p>
+<h3 id="关系问题交给图">关系问题交给图</h3>
+<p>段落检索适合回答单点事实。问「这台设备保几年」，找到一个块就够了。问「这位客户之前买过哪些设备、这些设备的维修记录里有没有重复故障」，需要把多个块里的实体连起来。</p>
+<p>图记忆用节点存实体、用边存关系、用属性存细节，形态接近知识图谱，不一定是图数据库。例子里订单 ORD-1002 属于客户 C-017，C-017 关联三个案例，每个案例挂着若干次维修尝试（每次有日期和结果）。要回答「这位客户的首选联系方式」，得先通过订单找到客户，再读客户档案。</p>
+<p>图检索分两类问题。局部问题在某个实体的邻域里找；邻域就是沿边一步或几步能到的节点，例如这位客户试过哪些处理。全局问题则可能需要社区划分：把关系紧密的节点聚成一簇，再为各簇写摘要。</p>
+<p>GraphRAG 把这样的簇称为社区（community）。这些摘要适合回答「这批案例里反复出现的风险是什么」这类整体问题。</p>
+<p>图也有代价。抽取关系要跑模型；合并实体要处理「同名不同物、同物不同名」；源文件更新后，图还要增量维护。</p>
+<p>关系抽错比段落检索错得更隐蔽，因为错误会沿边传播。多跳问题要逐跳核对证据——每经过一条关系算一跳，每一跳都要有原文支撑。</p>
+<h3 id="检索的验收指标">检索的验收指标</h3>
+<p>改检索器之后要能回答「到底变好没有」。只看最终答案的准确率不够，它分不清是召回没拿到，还是重排没排好。</p>
+<p>召回看前 k 条里有没有正确证据，用 P@k 和 R@k。先说清分母：P@k 的分母是 k（只看前 k 个位置），R@k 的分母是库里相关条数。举例：一个问题有 5 条正确证据，检索返回 5 条，其中 3 条正确，P@5 是 3/5=0.6，R@5 是 3/5=0.6。换一个例子：返回 5 条里 2 条正确，而库里共有 4 条相关，P@5 是 2/5=0.4，R@5 是 2/4=0.5。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mi mathvariant="normal">@</mi><mi>k</mi><mo>=</mo><mfrac><msub><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">l</mi></mrow><mi>k</mi></msub><mi>k</mi></mfrac><mo separator="true">,</mo><mspace width="2em"/><mi>R</mi><mi mathvariant="normal">@</mi><mi>k</mi><mo>=</mo><mfrac><msub><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">l</mi></mrow><mi>k</mi></msub><msub><mi>N</mi><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">l</mi></mrow></msub></mfrac></mrow><annotation encoding="application/x-tex">P@k = \frac{\mathrm{rel}_k}{k}, \qquad R@k = \frac{\mathrm{rel}_k}{N_{\mathrm{rel}}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord">@</span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord mathrm">rel</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord">@</span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.2074em;vertical-align:-0.836em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight">rel</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord mathrm">rel</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>rel_k 是前 k 条里相关条数，N_rel 是库里相关条数，k 是这次考察的前 k 条位置数；通常等于返回条数。</p>
+<p>排序看正确证据排得靠不靠前。平均倒数排名（Mean Reciprocal Rank，MRR）是最简单的指标：第一条正确证据排在第 2，倒数是 0.5；排在第 5，倒数是 0.2。多个问题取平均，数值越高说明正确证据越靠前。</p>
+<p>生成侧再分两层。一层看答案与证据是否一致：每个断言都能在证据里找到对应原文。另一层看答案本身对不对；答案是否正确，可以由人工或评分模型按标准答案核对。</p>
+<p>精确匹配和词重叠率适合初筛，还应检查事实支撑率，即断言中有多少能在证据里找到支持。词重叠对否定词不敏感，单独用它会把「尚未开通」和「已经开通」判成高分。工程上还要报索引成本、查询延迟和每次提问的花费，避免把更贵的系统当成更好的系统。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>单次全量重建的成本是一次性的，但源文件一改就要重跑，所以总成本是持续的。一次全量重建要解析所有文件、跑编码器、写向量，源文件多的时候要按小时算。增量更新便宜，代价是索引里可能长期留着旧块。</p>
+<p>查询成本主要在重排和生成。重排每条候选都要过一次模型；候选从 15 条加到 40 条，按每条同价算约 2.7 倍，如果模型批处理或并行，实际倍率会低于这个数。生成要带上证据原文，证据越多输入越长，一次问答的 token 成本随之上升。</p>
+<p>最常见的失败之一，是证据本身有问题。相关文本里没有答案、旧版本还留在库里、线索散落在多段，这些要靠修索引、清旧版本和补证据解决。召回没拿到的证据，重排再准也补不回来。</p>
+<p>图检索适合关系密集的问题，不适合只查一条记录的查询。为一条保修期限建图，维护成本远超收益。关系会变的问题还要持续维护边，维护不及时，图比段落更容易给出过时答案。</p>
+<h2 id="自测">自测</h2>
+<ol><li>建库段和查询段各做哪几步？为什么过滤要放在检索之前？</li><li>一个问题有 4 条正确证据，检索返回 5 条，其中 2 条正确。P@5 和 R@5 分别是多少？第一条正确证据排在第 2 时，倒数排名是多少？</li><li>文档 A 关键词排第 1、向量排第 5，文档 B 关键词排第 3、向量排第 2，按名次加六十的倒数融合，谁的分数高？</li><li>什么问题适合用图检索，什么问题不适合？各举一例。</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2005.11401" rel="noreferrer">检索增强生成原论文</a>。</li><li><a href="https://arxiv.org/abs/2404.16130" rel="noreferrer">图检索与全局摘要</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-memory.html"><small>上一章</small><span>记忆：四种角色与作用范围</span></a>
+  <a class="nav-next" href="ch-skill-package.html"><small>下一章</small><span>技能包：结构、分阶段加载与自改进</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

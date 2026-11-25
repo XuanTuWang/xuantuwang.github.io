@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>记忆：四种角色与作用范围 · Agent 概论</title>
+<meta name="description" content="哪些信息该记住、下次怎么调出来、过时的怎么清掉。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#聊过存过用过是三件事">聊过、存过、用过是三件事</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="memory" data-part="p1">
+    <p class="crumb"><a href="index.html">目录</a> / 行动 / 第 8 章</p>
+    <div class="prose-body">
+<h1>记忆：<br>四种角色与作用范围</h1>
+<p>假设一位客户昨天在电话里说过「以后请用邮件联系我」，今天又打电话来说「还是打电话吧」。如果系统明天打开新会话时仍然按邮件发送通知，问题出在记忆的写入、读取和过期三件事，其中有一环没做对。</p>
+<p>打个比方，记忆像一本分层的笔记本：手头这张是当前任务，本子上记着用过的办法，抽屉里存着老客户的长期偏好。哪一页该翻到桌上、哪条已经过期要划掉，都有规矩。</p>
+<p><strong>正式定义</strong>：记忆是保留下来的信息，加上让后续决策能用上它的机制。按内容分语义、情景、程序、工作四类，按作用范围分单请求、单任务对话、跨对话三档。写入要受控，读取要同时核对归属和有效期。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-08/panel-1.webp" alt="第 8 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：客户 A 喜欢这个，没错。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-08/panel-2.webp" alt="第 8 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：你把 B 的偏好记到 A 身上了，我们再对一遍。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-08/panel-3.webp" alt="第 8 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：工作、情节、语义、程序，分开放才不容易混。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-08/panel-4.webp" alt="第 8 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：只取和当前任务相关的那张。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>记忆是保留下来的信息，加上让后续决策能用上它的机制。它按内容角色分四类：语义、情景、程序、工作。按作用范围分三档：单请求、单任务对话、跨对话。写入要受控，模型只能提议，<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>核对证据后才落库。读取要同时过滤归属和有效期，两条都满足才能进<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>。</p>
+<h2 id="聊过存过用过是三件事">聊过、存过、用过是三件事</h2>
+<p>用户上周说喜欢靠窗的座位，今天让助手订房。聊天历史里出现过这句话，这次模型未必看得到。系统要先保存，再在合适的任务中检索，最后放入当前输入。</p>
+<p>一条可用的记忆像带出处的笔记。“用户喜欢靠窗”还应附上表达者、时间和适用场景。用户说“今天避开窗边”，这次就按要求办，长期偏好保持原样。</p>
+<figure class="teaching-figure"><img src="figures/lesson-memory.svg?v=8a87c6781d42" alt="图 8.1 · 已保存的A、B、C中，只有检索到的B进入本次输入。" loading="lazy" decoding="async"><figcaption>图 8.1 · 已保存的A、B、C中，只有检索到的B进入本次输入。</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>记录都存着，为什么只送来B？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>保存与使用是两步。<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>只把这次检索到的相关记录放进输入，其余记录仍在存储中。</p></aside>
+</div></figure>
+<p>左侧表示应用保存的记录，右侧表示本次交给模型的材料。这个例子只取出了相关记录 B；A 和 C 仍在库里，没有自动进入输入。读取记录改变本次材料，不会因此更新<abbr class="term" tabindex="0" title="模型参数（Model Parameters）：模型通过训练学到的数值，例如矩阵中的权重。参数量表示这些数值的数量。" data-tip="模型参数（Model Parameters）：模型通过训练学到的数值，例如矩阵中的权重。参数量表示这些数值的数量。">模型参数<span class="term-en">（Model Parameters）</span></abbr>。</p>
+<h3 id="一条偏好怎样安全进入下一次任务">一条偏好怎样安全进入下一次任务</h3>
+<p>小模从对话里提出候选事实，例如“客户说以后用邮件联系”；小运核对这句话确实来自当前客户，再检查有没有冲突的旧记录。下次订房时，还要核对用户身份和用途，并检查是否有更新。偏好与本次明确要求冲突时，应以当前要求为准，必要时询问。</p>
+<p>上次订到窗边房，可能是因为只剩那间，也可能是别人代选。记录里应保留“订过窗边房”这个事实；若据此推测用户喜欢靠窗，就另记为推断，别当成用户亲口表达的偏好。</p>
+<p>记忆也会过期。旧地址、旧项目状态和已经撤回的授权，都可能留下错误影响。删除或纠正一条记忆时，还要处理它的重复副本与摘要，避免旧内容再次被检索出来。</p>
+<p>读取笔记只改变这一次输入，不更新模型参数。模型表现得像“记住了你”，可能来自应用层的检索；理解这一点，才能找到修改与删除的位置。</p>
+<p>助手记错偏好时，除了纠正一句话，还要检查保存的事实、它的来源、作用范围，以及后续读取时使用的副本。</p>
+<h2 id="机制">机制</h2>
+<h3 id="四种角色按颗粒度分">四种角色按颗粒度分</h3>
+<p>先分清两个维度：四种角色说的是内容类型，三档作用域说的是保存多久、归谁。前三类看内容颗粒度，工作记忆看当前任务状态。</p>
+<p>先看四种记忆各自存什么。语义记忆存关于人、产品、世界的事实，例如「这位客户偏好电话联系」。情景记忆存某个时间点发生过什么，例如「十月一日重启耳机，没有改善」。程序记忆存做某类事的方法，例如「先确认型号，再问症状，再查指南」。工作记忆存当前任务的目标、状态和已选中的证据，例如「案例未关闭，重启失败，下一步问连接设备」。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">角色</th><th scope="col">存什么</th><th scope="col">一个客服例子</th></tr></thead><tbody><tr><td>语义</td><td>人物、产品、世界的事实</td><td>客户要求用邮件联系</td></tr><tr><td>情景</td><td>谁在何时做了什么、结果如何</td><td>十月一日重启耳机没有改善</td></tr><tr><td>程序</td><td>做某类事的方法</td><td>先确认型号，再问症状，再查指南</td></tr><tr><td>工作</td><td>当前目标、进度与选中证据</td><td>案例未关闭，下一步问连接设备</td></tr></tbody></table></div>
+<p>区分时可以看颗粒度：一次具体事件落在情景，一条通用做法落在程序，一条关于人或产品的事实落在语义。工作记忆描述当前任务状态，任务结束就该清掉，留到下一次反而会误导。</p>
+<p>边界在两个容易混的地方。客户说「上次重启没用」，这是情景；「重启没用就查连接设备」是程序。两者经常一起出现，但存储和失效方式不同：情景会过期，程序会改版。</p>
+<h3 id="作用域决定存在哪里">作用域决定存在哪里</h3>
+<p>作用域指这条记忆归谁、能活多久。同一个事实放在哪一层，取决于它要活多久。单请求的状态只活一次推理，例如这次请求的意图、选中的订单号、刚查到的证据，用内存里的一个字典就够。单任务对话的状态要跨多轮，例如消息列表、待回答问题、当前进度，需要<abbr class="term" tabindex="0" title="检查点（Checkpoint）：保存下来的运行状态，供中断后恢复。" data-tip="检查点（Checkpoint）：保存下来的运行状态，供中断后恢复。">检查点<span class="term-en">（Checkpoint）</span></abbr>（可恢复的存档点）或数据库。跨对话的偏好和可复用案例，才需要长期表。</p>
+<p>作用域可以用三种存放方式说明：单请求状态放内存，单任务对话放检查点，跨对话偏好放持久存储。单请求状态默认随进程结束消失；检查点是否跨重启，取决于它落在内存还是磁盘；跨对话偏好则必须持久化。</p>
+<p>生产环境按生命周期选存储；三者可以放在不同的库里。</p>
+<figure><img src="figures/13-memory-scopes.svg?v=0b16973776b2" alt="图 8.2 · 三种作用域与读写方向" loading="lazy" decoding="async"><figcaption>图 8.2 · 三种作用域与读写方向</figcaption></figure>
+<p>图里三层的读写方向不同。单请求状态频繁读写、生命周期最短；单任务状态随检查点落盘；跨对话记忆写入最少，但每次新会话都要参与检索。</p>
+<p>工作记忆描述当前任务状态，通常由运行时保存，只有被选中的部分才进入上下文。</p>
+<p>作用域弄错的后果比丢记忆更严重。把其他客户的情景记忆当成当前客户的事实读进来，回答会引用别人的案例。把单任务的临时让步写进长期偏好，下次任务会被一条过期规则绑住。</p>
+<h3 id="写入是一条流水线">写入是一条流水线</h3>
+<p>写入分四步：观察、候选、校验与去重、按作用域记录。观察来自对话或工具结果，候选是模型提议要记住的内容，校验检查证据和归属，去重则避免同一条偏好存十遍。</p>
+<p>受控写入的关键在于确认。客户说「请打电话」，模型可以提议把联系方式改成电话。运行时先核对这句话确实来自当前客户，再检查有没有冲突的旧记录，最后才落库。落库成功之后，才把结果告诉客户。反过来，如果模型一开口就直接改库，一次识别错误就会永久污染档案。</p>
+<p>去重要有判据。主体和属性相同，说明是同一条偏好的新旧版本，例如「客户 C-017、联系方式」。取值也相同就是重复，直接忽略；取值不同（邮件改成电话）才写入新值，并把旧值标为已被替代。标记替代比直接删除更安全，出问题时还能查回原值。</p>
+<h3 id="读取要过两道过滤">读取要过两道过滤</h3>
+<p>读记忆先过归属和有效期两道过滤，再按相似度取。第一道过滤归属，只允许当前客户、当前任务的记录进入候选。第二道过滤有效期，被替代、已退役、超过保留期的记录一律不进上下文。</p>
+<p>一个典型故障可以说明第一道的价值。客户问的是打印机问题，系统召回的四条记录全部来自耳机案例。这四条记录语义上都和「设备故障排查」接近，所以相似度检索把它们排在了前面，但案例归属完全不匹配。</p>
+<p>用一组假设数字看<abbr class="term" tabindex="0" title="精确率（Precision）：挑出来的里面有多少是对的。" data-tip="精确率（Precision）：挑出来的里面有多少是对的。">精确率<span class="term-en">（Precision）</span></abbr>的变化。候选 12 条，其中本案例相关的 5 条、其他案例的 7 条。不按归属过滤时，取相似度前 5 条，只有 1 条属于本案例，精确率（precision）是五分之一，即 20%；本章自测沿用“精度”这个简称。</p>
+<p>加上归属过滤后候选剩 5 条，再取前 3 条，3 条全部正确，精确率 100%。这个例子只算精确率，没有算<abbr class="term" tabindex="0" title="召回率（Recall）：该挑出来的里面，实际挑出了多少。" data-tip="召回率（Recall）：该挑出来的里面，实际挑出了多少。">召回率</abbr>（recall，相关记录里被取到的比例）；过滤后取前 3 条，可能还有相关记录没被取到。</p>
+<h3 id="过期与合并">过期与合并</h3>
+<p>记忆会过时。客户改用电话之后，原来的邮件偏好应该退役。常见的做法是保留记录、写入新值，并把旧记录标记为「已被替代」，同时记下修改时间和证据来源。这样既能按新值回答，也能在争议时查回原值。</p>
+<p>第二次维护动作是合并。案例里客户试过两次重启，两次都失败。两条情景记录可以合并成一条经验：「该型号重启无效，下次直接查连接设备」。合并减少了记录数量，也把情景里的模式沉淀成可复用的做法，但它有风险，合并过程可能丢掉细节，例如第二次失败时的具体错误码。</p>
+<p>第三类维护是遗忘。日志级别的细节不需要进入长期记忆，例如每次接口返回的毫秒数。判断标准可以这样定：这条信息如果不记，下一次任务会不会做错。答案是否定的，就不该占一个记忆槽。</p>
+<h3 id="记忆也要算预算">记忆也要算预算</h3>
+<p>记忆与证据、工具说明共享上下文<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>。假设每次调用给记忆留 400 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr>，每条记忆平均 40 tokens，最多只能放 10 条。如果候选有 24 条，就要按新鲜度和重要性排序取 8 条，占用 320 tokens，留 80 tokens 给突发情况。</p>
+<p>排序本身也要花时间。先按归属和有效期过滤，候选会少很多。再按相似度排序，选出前 8 条。候选越多，这一步越慢，所以跨对话记忆需要定期整理，把长期不用的记录归档。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>记忆的成本先落在延迟上。每次写入多一次校验和落库，每次读取多两次过滤和一次排序，单次可能增加几十毫秒。对话轮次多的时候，这些毫秒会累积成可感知的等待。</p>
+<p>存储和维护是第二笔账。假设每天产生 30 条观察，一年约 1.1 万条，索引需要定期重建，合并任务需要定期运行。不整理的话，检索候选变多、精确率下降，最后变成记了很多但都不对。</p>
+<p>更隐蔽的成本是错误记忆的长期影响。一条过期偏好会污染之后所有对话，而且很难被发现，因为系统会自信地按旧值回答。所以写入侧宁可少记，也不要记不确定的内容。</p>
+<p>还有一类场景不适合上记忆。一次性的问答、公开信息查询，记住反而增加风险。记忆真正值钱的场景，是同一个主体反复出现、偏好会变化、又需要跨会话延续的任务。</p>
+<p>记忆检索的是关于这个用户或任务的事实；下一章 <abbr class="term" tabindex="0" title="检索增强生成（Retrieval-Augmented Generation，RAG）：先检索与问题有关的材料，再把证据交给模型生成回答。还要核对版本、适用范围和答案是否被证据支持。" data-tip="检索增强生成（Retrieval-Augmented Generation，RAG）：先检索与问题有关的材料，再把证据交给模型生成回答。还要核对版本、适用范围和答案是否被证据支持。">RAG</abbr>（检索增强生成）检索外部文档。两者都做相似度，但数据范围和更新方式不同。</p>
+<h2 id="自测">自测</h2>
+<ol><li>语义、情景、程序、工作四种记忆各举一例，并说明它们的区别在颗粒度上如何体现。</li><li>单请求状态和跨对话偏好为什么不能存放在同一层？放错会出现什么后果？</li><li>候选 12 条，本案例 5 条、其他案例 7 条。不按归属过滤取前 5 条只有 1 条正确，精度是多少？归属过滤后候选 5 条取前 3 条全部正确，精度是多少？</li><li>客户从邮件改用电话，写入侧应该保留哪两条记录、各自标什么状态？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2310.08560" rel="noreferrer">分层记忆与上下文管理</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-tool-loop.html"><small>上一章</small><span>工具调用循环与失败恢复</span></a>
+  <a class="nav-next" href="ch-rag-and-graph.html"><small>下一章</small><span>RAG 与图记忆</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

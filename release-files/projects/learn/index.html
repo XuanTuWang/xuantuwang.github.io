@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent 概论 · 目录</title>
+<meta name="description" content="23 章，跟着一个真实的订房、查订单例子，把一套能落地的 Agent 讲清楚。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-v3">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<section class="v3-hero">
+  <div class="v3-hero-copy">
+  <h1>Agent 概论</h1>
+  <p class="v3-course-count">23 章 · 4 个附录</p>
+  <p class="v3-support">从查订单、找资料和订房间出发，看懂模型怎样参与行动、程序怎样把关。</p>
+  <div class="v3-actions">
+    <a class="v3-btn" href="ch-what-is-an-agent.html">从第 1 章开始</a>
+    <a class="v3-link" href="#index-title">看目录</a>
+  </div>
+  <p class="v3-note">先读生活例子，再看机制。初次接触可先读第 1–3 章，再读<a href="ch-rag-and-graph.html">第 9 章检索</a>；公式与代码可按需深入。</p>
+  </div>
+  <figure class="v3-hero-art">
+    <img src="assets/orn/hero-characters.webp" alt="小模和小运在桌前看三张空白卡片组成的决策、执行、观察循环" loading="eager" decoding="async">
+    <figcaption>决策 → 执行 → 观察，回到决策。</figcaption>
+  </figure>
+</section>
+
+<section class="v3-run" data-run aria-label="一次订单查询的五步">
+  <div class="v3-run-inner">
+    <svg class="v3-rough-defs" width="0" height="0" aria-hidden="true">
+      <defs>
+        <filter id="v3rough" x="-3%" y="-3%" width="106%" height="106%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="0.8" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+    </svg>
+    <div class="v3-run-frame" aria-hidden="true"><i></i><i></i></div>
+    <p class="v3-run-intro">比如，用户问「我的订单到哪了」，系统实际走这五步。</p>
+    <p class="v3-run-label">订单查询 · 流程演示</p>
+    <div class="v3-stepnav" role="group" aria-label="选择步骤"><button type="button" data-step="0" aria-pressed="true" aria-label="第 1 步：组装">1</button><button type="button" data-step="1" aria-pressed="false" aria-label="第 2 步：决策">2</button><button type="button" data-step="2" aria-pressed="false" aria-label="第 3 步：执行">3</button><button type="button" data-step="3" aria-pressed="false" aria-label="第 4 步：观察">4</button><button type="button" data-step="4" aria-pressed="false" aria-label="第 5 步：停止">5</button></div>
+    <ol class="v3-steps">
+<li class="v3-step is-active">
+  <b>1 组装</b>
+  <strong>指令、历史、工具说明</strong>
+  <span>先留出回答要占的位置</span>
+</li>
+<li class="v3-step">
+  <b>2 决策</b>
+  <strong>lookup_order(ORD-1002)</strong>
+  <span>模型判断该查哪个订单</span>
+</li>
+<li class="v3-step">
+  <b>3 执行</b>
+  <strong>校验参数与权限</strong>
+  <span>程序核对通过后才去查</span>
+</li>
+<li class="v3-step">
+  <b>4 观察</b>
+  <strong>处理中，已 6 天</strong>
+  <span>查到的结果写回对话</span>
+</li>
+<li class="v3-step">
+  <b>5 停止</b>
+  <strong>verify()，COMPLETED</strong>
+  <span>验收通过才算办完</span>
+</li>
+    </ol>
+    <pre class="v3-payload" data-payload aria-live="polite">$ context = [system, history, tools, evidence]</pre>
+    <svg class="v3-run-doodle" viewBox="0 0 52 52" aria-hidden="true">
+      <path d="M9 27 C9 13 27 8 36 17 C44 25 38 39 27 39 C19 39 13 33 13 25"/>
+      <path d="M11 19 L9 28 L18 28"/>
+    </svg>
+  </div>
+</section>
+
+<section class="v3-index" aria-labelledby="index-title">
+  <div class="v3-statement">
+    <h2 id="index-title">目录</h2>
+    <label>
+      <span class="sr-only">搜索章节</span>
+      <input class="v3-filter" id="chapterFilter" type="search" placeholder="筛选" autocomplete="off">
+    </label>
+    <p class="v3-index-note">23 章，分为5个部分。每章包括速览、机制、成本与限制、自测。</p>
+    <img class="v3-index-art" src="assets/orn/loop-sketch.svg" alt="" aria-hidden="true">
+  </div>
+  <div class="v3-parts">
+<section class="v3-part" aria-labelledby="part-p0">
+  <h3 id="part-p0">入门</h3>
+  <div class="v3-rows">
+<a class="v3-row" href="ch-what-is-an-agent.html">
+  <span class="v3-row-num">1</span>
+  <strong>Agent 是什么：模型加工具</strong>
+  <span class="v3-row-sum">拆开看：一个会判断的模型、一批能动手的工具、一个把结果转回来的循环。</span>
+</a>
+<a class="v3-row" href="ch-request-to-action.html">
+  <span class="v3-row-num">2</span>
+  <strong>一个请求如何变成一次行动</strong>
+  <span class="v3-row-sum">五步走完一轮：谁出主意、谁动手、谁把结果带回来。</span>
+</a>
+<a class="v3-row" href="ch-token-generation.html">
+  <span class="v3-row-num">3</span>
+  <strong>一个 token 是怎么生成的</strong>
+  <span class="v3-row-sum">文字先切成 token，再一个一个选出下一个词。</span>
+</a>
+  </div>
+</section>
+<section class="v3-part" aria-labelledby="part-p1">
+  <h3 id="part-p1">行动</h3>
+  <div class="v3-rows">
+<a class="v3-row" href="ch-context-budget.html">
+  <span class="v3-row-num">4</span>
+  <strong>上下文预算：一次推理里装什么</strong>
+  <span class="v3-row-sum">窗口怎么分给指令、历史与证据。</span>
+</a>
+<a class="v3-row" href="ch-context-engineering.html">
+  <span class="v3-row-num">5</span>
+  <strong>上下文工程：压缩、刷新与前缀缓存</strong>
+  <span class="v3-row-sum">对话越堆越长，哪些该压缩、哪些能缓存复用。</span>
+</a>
+<a class="v3-row" href="ch-tool-contract.html">
+  <span class="v3-row-num">6</span>
+  <strong>工具：契约、约束解码与 MCP</strong>
+  <span class="v3-row-sum">双方同意的接口到底长什么样。</span>
+</a>
+<a class="v3-row" href="ch-tool-loop.html">
+  <span class="v3-row-num">7</span>
+  <strong>工具调用循环与失败恢复</strong>
+  <span class="v3-row-sum">调用失败后，重试、降级还是交人。</span>
+</a>
+<a class="v3-row" href="ch-memory.html">
+  <span class="v3-row-num">8</span>
+  <strong>记忆：四种角色与作用范围</strong>
+  <span class="v3-row-sum">哪些信息该记住、下次怎么调出来、过时的怎么清掉。</span>
+</a>
+<a class="v3-row" href="ch-rag-and-graph.html">
+  <span class="v3-row-num">9</span>
+  <strong>RAG 与图记忆</strong>
+  <span class="v3-row-sum">从分块到重排的完整检索链路。</span>
+</a>
+<a class="v3-row" href="ch-skill-package.html">
+  <span class="v3-row-num">10</span>
+  <strong>技能包：结构、分阶段加载与自改进</strong>
+  <span class="v3-row-sum">把反复要用的做法打包，用到时再分层加载进来。</span>
+</a>
+<a class="v3-row" href="ch-evaluation-layers.html">
+  <span class="v3-row-num">11</span>
+  <strong>评估分层与 LLM 指标</strong>
+  <span class="v3-row-sum">一次运行到底算不算成功。</span>
+</a>
+  </div>
+</section>
+<section class="v3-part" aria-labelledby="part-p2">
+  <h3 id="part-p2">系统</h3>
+  <div class="v3-rows">
+<a class="v3-row" href="ch-runtime-controller.html">
+  <span class="v3-row-num">12</span>
+  <strong>运行时控制器：预算、停止与验收回路</strong>
+  <span class="v3-row-sum">预算用完没有、能不能收尾、结果合不合格，由谁来拍板。</span>
+</a>
+<a class="v3-row" href="ch-action-boundary.html">
+  <span class="v3-row-num">13</span>
+  <strong>动作边界：策略即代码、审批与沙箱</strong>
+  <span class="v3-row-sum">为什么“别删文件”写在对话里不算数，权限必须由程序把守。</span>
+</a>
+<a class="v3-row" href="ch-workflow-patterns.html">
+  <span class="v3-row-num">14</span>
+  <strong>五种工作流模式与委派</strong>
+  <span class="v3-row-sum">哪些步骤该写死流程，哪些要边走边拆、派人协作。</span>
+</a>
+<a class="v3-row" href="ch-durable-state.html">
+  <span class="v3-row-num">15</span>
+  <strong>持久状态、崩溃窗口与恢复对账</strong>
+  <span class="v3-row-sum">程序崩了之后，怎么核对哪些事真做过、哪些要重来。</span>
+</a>
+<a class="v3-row" href="ch-observability.html">
+  <span class="v3-row-num">16</span>
+  <strong>可观测性与实验设计</strong>
+  <span class="v3-row-sum">把每一步记成可回放的记录，出错时能按线索定位。</span>
+</a>
+  </div>
+</section>
+<section class="v3-part" aria-labelledby="part-p3">
+  <h3 id="part-p3">评估</h3>
+  <div class="v3-rows">
+<a class="v3-row" href="ch-tool-skill-e2e-eval.html">
+  <span class="v3-row-num">17</span>
+  <strong>工具、技能与端到端评估</strong>
+  <span class="v3-row-sum">分开测工具、技能与完整任务。</span>
+</a>
+<a class="v3-row" href="ch-self-improvement.html">
+  <span class="v3-row-num">18</span>
+  <strong>自改进与评估器的不可编辑面</strong>
+  <span class="v3-row-sum">让系统自己改之前，先把打分和考卷锁在它碰不到的地方。</span>
+</a>
+  </div>
+</section>
+<section class="v3-part" aria-labelledby="part-p4">
+  <h3 id="part-p4">深入</h3>
+  <div class="v3-rows">
+<a class="v3-row" href="ch-transformer-design.html">
+  <span class="v3-row-num">19</span>
+  <strong>Transformer 通识：从 token 到下一个词</strong>
+  <span class="v3-row-sum">用一个例子走通分词、注意力与预测，再按需复算成本。</span>
+</a>
+<a class="v3-row" href="ch-training-stages.html">
+  <span class="v3-row-num">20</span>
+  <strong>训练三阶段：预训练、SFT、偏好与 RL</strong>
+  <span class="v3-row-sum">预训练、微调与偏好优化各改什么。</span>
+</a>
+<a class="v3-row" href="ch-inference-economics.html">
+  <span class="v3-row-num">21</span>
+  <strong>推理为什么贵：量化、缓存与注意力</strong>
+  <span class="v3-row-sum">显存、带宽与算力，瓶颈到底在哪。</span>
+</a>
+<a class="v3-row" href="ch-cost-estimation.html">
+  <span class="v3-row-num">22</span>
+  <strong>成本估算：FLOPs、显存与容量规划</strong>
+  <span class="v3-row-sum">不用跑模型，手算一次任务要花多少算力、显存和钱。</span>
+</a>
+<a class="v3-row" href="ch-multi-agent-frontier.html">
+  <span class="v3-row-num">23</span>
+  <strong>多智能体、计算机使用与生成式 agent</strong>
+  <span class="v3-row-sum">多个 Agent 协作、直接操作电脑界面、生成图文视频这三类前沿形态。</span>
+</a>
+  </div>
+</section>
+  </div>
+</section>
+
+<section class="v3-proof" aria-labelledby="proof-title">
+  <h2 id="proof-title">几张图</h2>
+  <p>三张图分别看推理瓶颈、运行时结构、操作界面的代价。</p>
+  <div class="v3-figures">
+<figure>
+  <img src="figures/teach-inference-phases.svg?v=59bf39ae515c" alt="预填充与解码的职责" loading="lazy" decoding="async">
+  <figcaption>先处理已有输入，再逐词生成。两段分别计时，见第 21 章。</figcaption>
+</figure>
+<figure>
+  <img src="figures/teach-runtime-architecture.svg?v=0770adfe46be" alt="模型与运行时的一次工具往返" loading="lazy" decoding="async">
+  <figcaption>组装输入、检查授权、执行工具，再写回结果。见第 12 章。</figcaption>
+</figure>
+<figure>
+  <img src="figures/teach-computer-access.svg?v=a823c4574b38" alt="接触一台计算机的四种方式" loading="lazy" decoding="async">
+  <figcaption>接口、命令、页面结构、屏幕，代价各不相同。见第 23 章。</figcaption>
+</figure>
+  </div>
+  <p class="v3-appendices"><a href="ap-a-glossary.html">附录 A · 术语表</a> · <a href="ap-b-formulas.html">附录 B · 公式与数值速查</a> · <a href="ap-d-sources.html">附录 D · 参考与图索引</a> · <a href="ap-e-answers.html">附录 E · 自测答案</a></p>
+</section>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

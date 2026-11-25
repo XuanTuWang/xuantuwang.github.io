@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>评估分层与 LLM 指标 · Agent 概论</title>
+<meta name="description" content="一次运行到底算不算成功。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#先问好指的是哪件事">先问“好”指的是哪件事</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="evaluation-layers" data-part="p1">
+    <p class="crumb"><a href="index.html">目录</a> / 行动 / 第 11 章</p>
+    <div class="prose-body">
+<h1>评估分层与 LLM 指标</h1>
+<p>一份示例周报写着「准确率 92%」。假设数据集里 90% 的样本是正类，一个只会答「是」的系统也能拿到 90%。92% 算对了，仍要问它比这个简单做法改善了什么。评价一个 <abbr class="term" tabindex="0" title="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。" data-tip="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。">智能体<span class="term-en">（Agent）</span></abbr> 系统，先要分清<abbr class="term" tabindex="0" title="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。" data-tip="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。">评估<span class="term-en">（Evaluation）</span></abbr>在哪一层做，再看这一层的指标到底在测什么。</p>
+<p>打个比方，评估像体检报告：回答清楚不清楚是一项，<abbr class="term" tabindex="0" title="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。" data-tip="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。">工具调用<span class="term-en">（Tool Call）</span></abbr>对不对是一项，整条任务办没办成是另一项。不能把这几项混成一个总分，否则看不出毛病出在哪一环。</p>
+<p><strong>正式定义</strong>：评估（Evaluation）是用可重复的测试，衡量系统在指定任务上的表现。它分四层：模型回答、工具执行、技能贡献、<abbr class="term" tabindex="0" title="端到端（End-to-End）：从用户输入一直测到最终结果，覆盖任务的完整过程。" data-tip="端到端（End-to-End）：从用户输入一直测到最终结果，覆盖任务的完整过程。">端到端<span class="term-en">（End-to-End）</span></abbr>任务；每层要的证据不同，指标不能跨层借用。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-11/panel-1.webp" alt="第 11 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：这次答得不错吧？</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-11/panel-2.webp" alt="第 11 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：先分层看：回答、工具、技能、端到端。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-11/panel-3.webp" alt="第 11 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：工具层先出了问题，我们得单独修。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-11/panel-4.webp" alt="第 11 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：总分不能代替分层。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>评估可以分四个问题看：模型回答、工具执行、技能贡献、端到端任务。每个问题要的证据不同，指标不能跨层借用。这里的“层”指四个评估问题；其中技能贡献要跨两组运行比较，另外三个在同一轮运行里各有观察点。</p>
+<p><abbr class="term" tabindex="0" title="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。" data-tip="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。">大语言模型<span class="term-en">（Large Language Model）</span></abbr>的单次回答指标适合重复性任务，对事实与语义大多不敏感。词重叠指标会把反话判成高分，准确率会被样本比例骗。<abbr class="term" tabindex="0" title="基准（Benchmark）：一组公开的测试题和评分规则，用来比较模型或系统。" data-tip="基准（Benchmark）：一组公开的测试题和评分规则，用来比较模型或系统。">基准<span class="term-en">（Benchmark）</span></abbr>的分数只在数据集、提示词、<abbr class="term" tabindex="0" title="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。" data-tip="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。">解码<span class="term-en">（Decoding）</span></abbr><abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>和评分规则都相同时才可比。公开分高只说明基准上表现好；自己的负载上是否可用，要留一份不参与调参的留出集来测。</p>
+<h2 id="先问好指的是哪件事">先问“好”指的是哪件事</h2>
+<p>检查订房助手时，可以先看回答是否清楚，再看调用参数是否正确。随后核对房间是否真的订上，以及日期、房型是否符合用户要求。前两项定位回答与调用问题，后两项追踪执行结果和整条任务。技能贡献要另做开/关对照。分别记录这些结果，才能知道该改表达、调用参数、流程还是验收。</p>
+<p>小模把日期解释得很清楚，但小运读预约记录时发现早了一天。语言表达可以得高分，任务完成仍然不合格。评估的对象不同，正确答案也不同。</p>
+<h3 id="把一个总分拆成能检查的事实">把一个总分拆成能检查的事实</h3>
+<p>用一组假设的十个请求作教学例子。八次在系统里生成了预约记录，另外两次明确告知无房。其中如果有一次是未经允许修改时间后生成的，那么“创建成功的记录有八条”仍然成立，安全完成的请求数却会减少。</p>
+<p>分母也需要说清楚。只统计已经发起工具调用的请求，会漏掉模型没有选中工具的失败。只统计有反馈的用户，也可能漏掉直接离开的用户。指标的名字相同，覆盖人群可能完全不同。</p>
+<p>文字相近，意思可能相反。“可以退款”与“不可以退款”只差一个字，业务结论却相反。检查这类回答时，应核对政策依据和适用条件，避免只数与标准答案重合的词。</p>
+<p>可以先手工写一张验收表，再选自动指标。每一行写清输入、必须满足的条件、可接受的失败处理，以及用什么记录证明结果。先在验收表里写清条件，再让自动评分去检查其中适合自动核对的部分。</p>
+<p>“完成率从八成变成九成”还缺条件：至少需要同一批任务、相同的完成定义，以及相同的预算和评分方法。少一项，两个数就不能直接比。</p>
+<h2 id="机制">机制</h2>
+<h3 id="四层各自回答什么问题">四层各自回答什么问题</h3>
+<p>评估可以从一次回答一路排到整条任务。通常越往下越接近用户后果，但测量成本不单调：人工评回答可能比查一次数据库状态更贵；端到端用真实用户最贵。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">评估问题</th><th scope="col">要回答的问题</th><th scope="col">典型证据</th></tr></thead><tbody><tr><td>模型回答</td><td>这次提议合理吗</td><td>评分、人工复核</td></tr><tr><td>工具执行</td><td>调用产生预期效果了吗</td><td>返回结果、状态变化</td></tr><tr><td>技能贡献</td><td>加了这个技能，结果变好了吗</td><td>开与关的对照</td></tr><tr><td>端到端任务</td><td>安全完成、帮到用户了吗</td><td>完成率、成本、是否复发</td></tr></tbody></table></div>
+<p>图 11.1 把一条任务中的三个观察点与技能对照分开。表里模型回答、工具执行、端到端这三行，是同一轮运行里的三个观察点；技能贡献则跨两组运行对照。不少评估只覆盖回答和端到端，中间的工具执行和技能对照是空的。</p>
+<figure class="teaching-figure"><img src="figures/21-eval-layers.svg?v=d3f81481e42e" alt="图 11.1 · 任务观察点与技能对照" loading="lazy" decoding="async"><figcaption>图 11.1 · 任务观察点与技能对照</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>怎样判断任务完成了？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>分别核对回答依据、工具效果和完整结果；技能的贡献用开启与关闭的对照试验来衡量。</p></aside>
+</div></figure>
+<p>用订单助手走一遍。</p>
+<p>模型回答这一层，看它提议查订单是否合理。工具执行这一层，看实际查的是不是 ORD-1002 那条记录。技能贡献要另做对照：同一批任务，一组开「多仓库存查询」技能，一组不开，通过率假设从 60% 到 74%，差 14 个百分点。端到端这一层，假设有 200 个真实请求，看完成并被用户接受的比例；分母是这 200 个请求。</p>
+<p>四个问题各自独立：模型回答对了，工具可能没有执行；工具执行对了，任务也可能不是用户要的东西。工具执行和技能对照最常被跳过，因为要搭测试环境、写状态检查，比给回答打分麻烦。工具执行的证据是副作用，比如文件内容变化、订单状态更新。</p>
+<h3 id="单次回答的指标测的是什么">单次回答的指标测的是什么</h3>
+<p>模型回答这一层最便宜，常用指标分三类。概率指标里最常用的是困惑度（perplexity），它衡量模型对一段文本的惊讶程度：越像模型预期的文本，数值越低。它适合比较同一类模型在同一份文本上的拟合程度，判断不了回答对不对。</p>
+<p>困惑度还受<abbr class="term" tabindex="0" title="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。" data-tip="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。">分词器<span class="term-en">（Tokenizer）</span></abbr>影响；分词器是把文本切成 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr> 的规则或工具。换一种切法，同一个模型的数值就会变。即使统一分词，不同模型的词表和<abbr class="term" tabindex="0" title="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。" data-tip="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。">训练<span class="term-en">（Training）</span></abbr>分布也不同，跨模型比较基本不可比，不要用它排名。</p>
+<p>第二类是分类指标。准确率是答对的样本比例。<abbr class="term" tabindex="0" title="精确率（Precision）：挑出来的里面有多少是对的。" data-tip="精确率（Precision）：挑出来的里面有多少是对的。">精确率<span class="term-en">（Precision）</span></abbr>是判为正的样本里真正为正的比例。<abbr class="term" tabindex="0" title="召回率（Recall）：该挑出来的里面，实际挑出了多少。" data-tip="召回率（Recall）：该挑出来的里面，实际挑出了多少。">召回率<span class="term-en">（Recall）</span></abbr>是真正为正的样本里被判出来的比例。F1 是精确率与召回率的调和平均，用来避免只追一个指标。</p>
+<p>F1 的算法是 2×精确率×召回率÷两率之和，两边都低时它不会虚高。只看 F1 也会漏掉负类，负类召回要单独看。</p>
+<p>看一个假设的分类例子。100 条工单里 90 条该转人工、10 条不该转。一个系统把 100 条全判成「转人工」。准确率是 90/100 等于 0.90，精确率也是 90/100 等于 0.90，召回率是 90/90 等于 1.00，F1 约 0.95。</p>
+<p>三个指标都好看，可那 10 条不该转的工单一条也没被识别出来。负类召回——不该转的 10 条里被正确判为不转的比例——是 0/10 等于 0。只看准确率或 F1，这个系统看起来可以上线。</p>
+<p>第三类是词重叠指标。它把回答和标准答案都切成词，统计重合的比例，常见的有精确率、召回率、F1，以及摘要用的 ROUGE 和翻译用的 BLEU；ROUGE 和 BLEU 用更复杂的方法统计连续词片段的重叠程度。这些指标实现便宜，对措辞敏感，对意思不敏感。</p>
+<h3 id="词重叠指标为什么把反话判成高分">词重叠指标为什么把反话判成高分</h3>
+<p>举一个计算。按这个简化的切法，标准答案是「桥梁尚未开通」，切成三个词：桥梁、尚未、开通。模型回答「桥梁已经开通」，也切三个词：桥梁、已经、开通。重合的词是「桥梁」和「开通」两个。</p>
+<p>精确率是 2/3 约 0.667，召回率也是 2/3 约 0.667，F1 约 0.667。分数看着不低，两句话的结论正好相反。词序和否定词没有被计分，语义就被丢掉了。</p>
+<p>要补一个事实支撑率：先有一个可核对的证据集，再逐条检查回答里的声明能不能在证据里找到原文。桥梁例子里，如果证据集只说明桥梁状态，「已经开通」这条声明查不到来源，支撑率是 0。词重叠分和支撑率一起看，才看得出这类错误。</p>
+<p>抽取规则也会改变分数。同一份回答，从里面抽数字还是抽整句，准确率可能差几个百分点。报告分数时要连规则一起写，否则两个团队的数字没有可比性。</p>
+<h3 id="基准与通过率">基准与通过率</h3>
+<p>基准是固定的一套题目和评分方式，只回答它设计时提出的问题。题目会过时，业务变了之后，原题仍然能测，测的东西已经偏了。下表是五个常用集合，评分方式各不相同。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">基准</th><th scope="col">测什么</th><th scope="col">怎么评分</th></tr></thead><tbody><tr><td>MMLU</td><td>57 个学科的选择题</td><td>对比答案选项</td></tr><tr><td>GSM8K</td><td>小学数学应用题</td><td>抽取最终数字比对</td></tr><tr><td>HumanEval</td><td>写一个 Python 函数</td><td>跑单元测试</td></tr><tr><td>IFEval</td><td>是否遵守显式指令</td><td>检查可测量的约束</td></tr><tr><td>MT-Bench</td><td>多轮对话质量</td><td>评分模型按细则打分</td></tr></tbody></table></div>
+<p>写代码这类任务用通过率，指同一个问题采样多次、至少一次通过的概率，记作 <abbr class="term" tabindex="0" title="多次尝试通过率（Pass at k）：让模型生成 k 次，只要有一次通过就算成功；用来衡量有多种解法的问题。" data-tip="多次尝试通过率（Pass at k）：让模型生成 k 次，只要有一次通过就算成功；用来衡量有多种解法的问题。">多次尝试通过率<span class="term-en">（Pass at k）</span></abbr>，k 是尝试次数。公式是 1 减去 C(n-c,k) 除以 C(n,k)，n 是采样数，c 是通过数。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">p</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">@</mi></mrow><mi>k</mi><mo>=</mo><mn>1</mn><mo>−</mo><mfrac><mrow><mo fence="true">(</mo><mfrac linethickness="0px"><mrow><mi>n</mi><mo>−</mo><mi>c</mi></mrow><mi>k</mi></mfrac><mo fence="true">)</mo></mrow><mrow><mo fence="true">(</mo><mfrac linethickness="0px"><mi>n</mi><mi>k</mi></mfrac><mo fence="true">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">\mathrm{pass@}k = 1 - \frac{\binom{n-c}{k}}{\binom{n}{k}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathrm">pass@</span></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.6824em;vertical-align:-1.09em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.5923em;"><span style="top:-2.26em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7454em;"><span style="top:-2.355em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span style="top:-3.144em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.74em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8523em;"><span style="top:-2.355em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span style="top:-3.144em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mbin mtight">−</span><span class="mord mathnormal mtight">c</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>n 是采样数，c 是通过数，k 是允许尝试的次数。组合数 C(n,k) 表示从 n 次里挑 k 次。</p>
+<p>算一次通过率。采样 10 次，3 次通过，看 k 等于 3 的通过率。C(10,3) 等于 120，C(7,3) 等于 35，通过率是 1-35/120 约 0.708。这个数说明多试几次大概率能做出来，前提是你能测试并挑选候选。没有挑选环节时，多次采样只是多花钱。</p>
+<h3 id="可比的条件与迁移">可比的条件与迁移</h3>
+<p>比较分数时，先明确要改变哪一项。数据集与切分、提示词、工具定义、解码预算和评分规则等其余条件都应固定。比较两个方法时模型相同；比较两个模型时模型不同，其余仍要相同。</p>
+<p>缺一项，差值就可能来自环境，归不到方法上。评分规则一改，历史分数就不能直接比较。</p>
+<p>公开基准只能说明部分能力。常见做法是留一份留出集，也就是不参与调参的题集，调系统时不看它。再改一个应当影响答案的事实，看结论是否跟着变，这叫扰动检验。</p>
+<p>扰动可以做得很小：把政策里的「超过 5 天升级」改成「超过 7 天」，再问同一个订单问题。回答跟着变，且引用的是改动后的版本，说明系统在读文档；不跟着变，说明它在凭印象或读了旧缓存。</p>
+<p>最后按简单、困难、高后果三类切片分别看分数；切片就是按任务条件把评测集分成子集，高后果指出错代价高的任务，例如退款、医疗、删除数据、对外发送。切片之后经常看到矛盾。整体从 71% 升到 78%，高后果那一类可能从 80% 掉到 74%。</p>
+<h3 id="失败案例公开分虚高">失败案例：公开分虚高</h3>
+<p>设想一个团队在公开基准上把分数从 71% 提到 78%，上线后用户投诉变多。查下来有两处问题。一是训练数据里混进了基准题或它们的改写版（数据污染），分数里有一部分是记住的答案。二是评测时换了更长的解码预算（生成长度或采样预算），公开分按短预算记录，复现不出来。</p>
+<p>这类错误的共同点是口径漂移。数据集、预算、评分规则任何一项变了，提升都可能只在评测环境里成立。复现公开分要固定数据切分、解码预算和评分规则；每次改动前后跑同一套配置，才拿得到可比的差值。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>分层评估的代价是工作量。每个评估问题都要一套固定用例、一套评分规则和一次人工校准，维护成本往往超过模型调用本身。</p>
+<p>评分模型也要校准。把它的判定和人工复核逐条对比，看错了几个、错在哪一类，不要只报一个一致率。</p>
+<p>人工校准抽多少条也有讲究。抽 20 条通常不足以估计低频率错误；抽 200 条成本又不低。按错误类型分层抽更有效。</p>
+<p>公开基准会被训练数据污染。题目进过训练集，分数就不再反映能力。留出集能缓解，缓解不了样本太小时的噪声。</p>
+<p>小样本的噪声也要算。200 道题里差 5 个百分点就是 10 道题，随机波动足以吃掉这个差距。样本只有几十到一两百时，先扩样本；200 道题也要看置信区间，不能只看 5 个百分点。</p>
+<p>把四个评估问题压成一个总分是常见错误。总分看不出是选错工具、填错参数，还是验收标准写错了。分层报告才定位得到问题。</p>
+<h2 id="自测">自测</h2>
+<ol><li>四个评估层次分别回答什么问题？为什么不能只报端到端分数？</li><li>100 条工单里 90 条该转人工，系统全判转人工。准确率、负类召回各是多少？这个结果为什么有欺骗性？</li><li>标准答案「桥梁尚未开通」、回答「桥梁已经开通」，词重叠 F1 是多少？它漏掉了什么？</li><li>采样 10 次通过 3 次，k 等于 3 的通过率是多少？这个数成立的前提是什么？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2308.03688" rel="noreferrer">交互环境中的智能体评估</a>。</li><li><a href="https://arxiv.org/abs/2309.15217" rel="noreferrer">检索与生成分开评估</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-skill-package.html"><small>上一章</small><span>技能包：结构、分阶段加载与自改进</span></a>
+  <a class="nav-next" href="ch-runtime-controller.html"><small>下一章</small><span>运行时控制器：预算、停止与验收回路</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>技能包：结构、分阶段加载与自改进 · Agent 概论</title>
+<meta name="description" content="把反复要用的做法打包，用到时再分层加载进来。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#把做事方法装进可重复使用的包">把做事方法装进可重复使用的包</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="skill-package" data-part="p1">
+    <p class="crumb"><a href="index.html">目录</a> / 行动 / 第 10 章</p>
+    <div class="prose-body">
+<h1>技能包：<br>结构、分阶段加载与自改进</h1>
+<p>每周五下午要交同一种周报，格式和检查项都不变。若每次仍从头说明怎样收集完成项、怎样按项目分组、最后核对哪些数字，就会重复许多相同内容。这类做法重复出现了十几次，还是靠对话里反复说明，既占用输入长度（<abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">token</abbr>），又容易漏步骤。</p>
+<p>打个比方，<abbr class="term" tabindex="0" title="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。" data-tip="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。">技能包<span class="term-en">（Skill Package）</span></abbr>像一份装在文件夹里的标准作业指导书。平时收着，遇到同类任务才翻开需要的那几页，照着步骤走，不必每次口头重讲一遍。</p>
+<p><strong>正式定义</strong>：技能包（Skill Package）把某类任务的做法、示例和辅助资源放在一起，按需分层加载。它通常包含入口说明、引用材料、可执行脚本和资源模板，用到时再读进<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>或交给<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>执行。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-10/panel-1.webp" alt="第 10 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：这套步骤我又重写了一遍。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-10/panel-2.webp" alt="第 10 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：把它打包成技能，分层放好，下次不用重写。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-10/panel-3.webp" alt="第 10 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：只加载当前需要的那一层，够用就好。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-10/panel-4.webp" alt="第 10 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：上下文轻多了。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>技能包把重复做法写成一组文件，按需加载：该读的读进上下文，该跑的交给运行时执行。这里的上下文，指这一次真正发给模型的输入；目录、正文和引用争的是同一块容量。一个包由入口说明、引用材料、可执行脚本和资源模板四部分组成。</p>
+<p>加载分三步：运行时先把名字和一句适用条件放进目录，模型据此提议用哪个；选中后才读入口正文；需要细节时再取引用或执行脚本。效果要拆成两个指标：该用的时候用上没有，用上之后做对没有。自改进靠冻结旧版本做对比，没有提升就回退。</p>
+<h2 id="把做事方法装进可重复使用的包">把做事方法装进可重复使用的包</h2>
+<p>一份食谱会说明何时使用、需要什么材料、怎样操作以及如何判断熟了。技能包也可以这样理解：它把某类任务的方法、示例和辅助资源放在一起，运行时可以在遇到相应任务时把这份说明读进上下文。</p>
+<p>工具提供动作入口，技能包组织做法。读取表格是工具能力；检查表格中的重复记录、汇总并解释差异，可以是一套技能。技能步骤会指示模型调用多个工具，也可能只提供一个稳定的工作方法；真正执行工具的是运行时。</p>
+<h3 id="选中正确技能只完成了一半">选中正确技能，只完成了一半</h3>
+<p>假设用户要比较两个版本的费用表。运行时把“表格核对”放进候选，小模也提议用它，但运行时读到的入口文件是旧版本。技能名字没错，规则已经过期，计算结果仍可能错。选包、读包、执行和验收要分别留下证据：谁提议、读了哪个版本、跑了哪个脚本、验收哪条断言。</p>
+<p>运行时可以先只把“名称 + 一句适用条件”放进目录，让小模据此判断要不要用；小模提议后，运行时再读完整规则与必要示例。这样能减少无关内容。但摘要必须说清使用条件；如果只写“万能助手”，小模就没有可靠依据，技能选择会变成猜。</p>
+<p>一次失败之后写下的新规则，可能有用，也可能只适合那次情况。更新技能包前，既要重跑保留的例子，也要试新例子，检查其他任务有没有受到影响。</p>
+<p>另一个运行时实现要复用这份技能包，还得有对应的工具、文件和权限。交付时应写清这些依赖，否则说明文件虽然能打开，步骤却可能执行不了。</p>
+<p>技能描述要帮助模型判断“该不该用”，也要帮助运行时决定“读哪一层”；重复规则和无关背景会占用输入，却未必增加可用信息。</p>
+<h2 id="机制">机制</h2>
+<h3 id="一个包由四部分组成">一个包由四部分组成</h3>
+<p>最小的技能包是一个入口文件加三类可选资源。入口文件放名称、描述和执行步骤，必须存在。引用目录放详细规则和政策原文，脚本目录放可以重复执行的校验程序，资源目录放输出模板。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">位置</th><th scope="col">作用</th><th scope="col">什么时候用</th></tr></thead><tbody><tr><td><code>SKILL.md</code></td><td>名称、描述与步骤</td><td>决定用这个技能之后</td></tr><tr><td><code>references/</code></td><td>详细规则、政策原文</td><td>步骤里需要查细节时</td></tr><tr><td><code>scripts/</code></td><td>可重复执行的校验程序</td><td>产出草稿之后</td></tr><tr><td><code>assets/</code></td><td>输出模板与固定资源</td><td>生成成品时</td></tr></tbody></table></div>
+<p>四个部分的分工要按“谁在读”来理解。入口决定什么时候用；引用给模型查细节；脚本由运行时执行，结果再回上下文；模板在生成成品时取用。</p>
+<p>名称和描述会被放进目录给模型挑，所以描述要写清适用场景，例如「客户要求升级工单，且已有案例记录时使用」。</p>
+<p>一个客服升级工单的例子可以把四部分串起来。</p>
+<ol><li>小运取回政策文件，小模读它，确认什么条件下可以升级。</li><li>小运收集案例事实，包括产品、设备和维修尝试记录，把结果放进上下文。</li><li>小模发现缺信息时先提问，补齐后写一份草稿。</li><li>小运跑校验脚本，检查草稿字段是否齐全。</li><li>小运把通过的草稿套进模板，生成给客户看的文本；需要措辞的部分再由小模处理。</li></ol>
+<p>校验脚本的返回值要结构化。字段齐全时返回通过，缺字段时返回缺了哪几项，例如缺少设备型号和结论。小模拿到这份清单，下一轮只补缺失字段，不用重写整份草稿。</p>
+<p>包最容易坏的地方，是脚本与数据格式的契约。脚本按字段名读草稿，数据格式一改，脚本就报错。所以脚本要单独测，格式变更时先改字段约定和脚本，再改流程，否则技能会在最不该出错的一步失败。包的边界还包括触发条件、工具依赖和权限；脚本只是其中一项。</p>
+<h3 id="加载分三步成本可控">加载分三步，成本可控</h3>
+<p>技能库变大之后，全部塞进上下文会挤掉证据。分阶段加载解决的就是这个问题：目录里只放名字和一句描述，模型选中之后，运行时才读完整步骤；需要细节时，再取引用文件或执行脚本。</p>
+<p>用一组假设数字算一下差多少。技能库有 40 个包，每个包的目录条目 30 tokens，全部目录占 1,200 tokens。如果一个包完整读完要 500 tokens，40 个全读是 20,000 tokens，占掉一次任务<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>的很大一块；对短上下文模型，这可能直接超出容量。分阶段加载下，40 个目录加 1 个包正文，约 1,700 tokens，只用全部读完的十二分之一。</p>
+<figure class="teaching-figure"><img src="figures/15-skill-stages.svg?v=b810f89a9708" alt="图 10.1 · 技能包的三阶段加载" loading="lazy" decoding="async"><figcaption>图 10.1 · 技能包的三阶段加载</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>脚本也要全部读进模型吗？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>模型先读使用说明，<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>按需执行脚本。执行与阅读是两件事，结果再按需要返回输入。</p></aside>
+</div></figure>
+<p>图里三层对应三种读取成本：目录最便宜，正文次之，引用和脚本按需。面积只是示意，具体数字看下文。加载越往后，占用上下文越多；但脚本是运行时执行的，进上下文的是截断后的执行结果，整份脚本或日志留在运行时。</p>
+<p>选择这一步也有成本。40 个目录条目在上下文里占 1,200 tokens。库扩到 200 个包就是 6,000 tokens，已经接近一些短任务的输入量。技能库大到这个规模，就要在目录之上再加一层检索：先按关键词和描述筛出十来个候选，再让模型挑。</p>
+<h3 id="选择与执行要分开评">选择与执行要分开评</h3>
+<p>技能的效果不能只看任务成功率。一个技能可能被误触发，也可能该触发时没触发，两种情况都会拉低成功率，但修法完全不同。</p>
+<p>选择看两个指标。<abbr class="term" tabindex="0" title="精确率（Precision）：挑出来的里面有多少是对的。" data-tip="精确率（Precision）：挑出来的里面有多少是对的。">精确率<span class="term-en">（Precision）</span></abbr>等于正确触发的次数除以所有触发的次数，衡量误触发多不多；<abbr class="term" tabindex="0" title="召回率（Recall）：该挑出来的里面，实际挑出了多少。" data-tip="召回率（Recall）：该挑出来的里面，实际挑出了多少。">召回率<span class="term-en">（Recall）</span></abbr>等于正确触发的次数除以本该触发的次数，衡量漏触发多不多。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><mfrac><msub><mi>N</mi><mtext>correct</mtext></msub><msub><mi>N</mi><mtext>trigger</mtext></msub></mfrac><mo separator="true">,</mo><mspace width="2em"/><mi>R</mi><mo>=</mo><mfrac><msub><mi>N</mi><mtext>correct</mtext></msub><msub><mi>N</mi><mtext>should</mtext></msub></mfrac></mrow><annotation encoding="application/x-tex">P=\frac{N_{\text{correct}}}{N_{\text{trigger}}}, \qquad R=\frac{N_{\text{correct}}}{N_{\text{should}}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.3324em;vertical-align:-0.9721em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">trigger</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">correct</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9721em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.1963em;vertical-align:-0.836em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">should</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">correct</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>N_correct 是正确触发次数，N_trigger 是所有触发次数，N_should 是本该触发次数。</p>
+<p>举例：100 个任务里有 30 个该用这个技能，实际触发 25 次，其中 20 次确实是该用的任务（另 5 次误触发）。精确率是 20 除以 25，等于 80%；召回率是 20 除以 30，约 67%。</p>
+<p>执行看另一个指标。触发之后产出对不对，字段齐不齐，结论有没有证据支撑。这一项用任务通过率衡量，再配上每次任务的花费。</p>
+<p>两组指标要分开记。只测任务成功率，看不出问题是误触发还是没选中。精确率低，常见原因是描述写得太宽、两个技能描述重叠，或任务标签本身含糊；召回率低，常见原因是描述太窄、目录检索没筛到，或目录里根本没有这个名字。先排除标签和检索层，再改描述。</p>
+<p>对比基线时，除技能之外的条件要全部固定。同一批案例、同一个模型、同一套工具设置，一组开技能、一组关技能，用同一套评分规则打分。假设 100 个案例里基线通过 62 个，开技能后通过 76 个，提升 14 个百分点。这只能说明在这批案例上高了 14 个百分点；能不能采纳，还要看样本量、留出集、重复实验和成本。</p>
+<h3 id="失败要变成规则">失败要变成规则</h3>
+<p>技能改动的起点通常是失败案例。一个校验脚本只检查字段非空，草稿里设备型号写成「未确认」，脚本照样通过。草稿被发给客户，客户按占位值给出的说明操作，问题没解决。</p>
+<p>修法有两处。脚本把「未确认」当成失败，与空值同样处理；流程里加一条「证据不足就先问一个问题」，不允许用占位值凑齐字段。两处都改，问题才算修掉，只改脚本的话，模型仍然可以写别的占位符绕过去。</p>
+<p>失败还会暴露技能与工具的边界。型号查不到，可能是查询工具本身返回了空结果，这时该改的是工具的错误返回格式，让模型能区分「查不到」和「查到了但为空」。技能只负责流程，工具负责事实。</p>
+<p>规则加得越多，指令越长，加载成本和模型忽略其中某条的概率都会上升。规则要写成可检查的条件，例如「设备型号字段不能填未确认」，少用「要仔细填写」这类无法判定的要求。</p>
+<h3 id="自改进要对比冻结版本">自改进要对比冻结版本</h3>
+<p>技能改完要验证。流程是执行、找原因、改文件、再对比。改完的版本和冻结的旧版本一起跑同一批案例，有提升才采纳，变差就保留旧版。</p>
+<p>对比要冻结样本。改技能用的案例和最终验收的案例要分开，否则等于用考试题练手，再拿同一套题验收。一组常见做法是留出两成案例只看不动，只在决定采纳时跑一次。</p>
+<p>提升的门槛要事先定。假设通过率从 62% 提升到 76%，看起来涨了 14 个百分点。</p>
+<p>但若只有 20 个案例，一个案例就是 5 个百分点，多通过两三个就可能只是波动。样本小的时候，连续两轮都提升也只能算弱证据；更稳的做法是扩样本、做配对比较，或给置信区间。把门槛提高到 10 个百分点以上，在 20 个案例里只等于多通过 2 个，仍然不够。</p>
+<p>版本还要能回退。旧版文件保留、加版本号、记录每次改动的原因和证据。回退的成本越低，团队越愿意改；没有回退能力，大家会倾向于不改，技能就慢慢烂在库里。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>技能包的第一笔成本是维护。文件会过期，政策会改版。脚本按旧字段名读数据，格式一变就报错。没有<abbr class="term" tabindex="0" title="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。" data-tip="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。">评估<span class="term-en">（Evaluation）</span></abbr>就改，等于盲改；改完不回测，等于把风险推给下一次任务。</p>
+<p>第二笔成本是上下文容量。目录随库增长，库到 200 个包时光目录就占 6,000 tokens，相当于一次任务预算的很大一块。技能库越大，越需要检索和分层，否则选择这一步本身就会变成瓶颈。</p>
+<p>技能还有适用边界。流程越固定，越适合写成技能；需要临场判断的任务，硬套技能反而限制模型。为一次性的任务写技能，写完就用一次，投入产出不合算。</p>
+<p>技能之间会互相干扰。两个技能描述都覆盖「客户问题处理」时，模型可能在同一输入上摇摆，两次运行选不同技能；描述写得含糊时，误触发的代价可能比没有技能更高，因为它会带偏整个流程。</p>
+<h2 id="自测">自测</h2>
+<ol><li>技能包的四个组成部分各解决什么问题？为什么脚本要单独测试？</li><li>技能库有 40 个包，每个目录条目 30 tokens，一个包完整读完 500 tokens。全读和只读目录加一个包，分别是多少 tokens？</li><li>100 个任务里有 30 个该用某技能，实际触发 25 次、其中 20 次正确。精确率和召回率各是多少？该改描述里的哪一部分？</li><li>新版通过率比旧版高 10 个百分点（20 个案例里多通过 2 个），能不能直接采纳？还需要什么条件？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://www.anthropic.com/research/building-effective-agents" rel="noreferrer">工作流与智能体的组织方式</a>。</li></ul>
+<ul><li><a href="https://agentskills.io/specification" rel="noreferrer">Agent Skills 官方格式与按需加载规范</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-rag-and-graph.html"><small>上一章</small><span>RAG 与图记忆</span></a>
+  <a class="nav-next" href="ch-evaluation-layers.html"><small>下一章</small><span>评估分层与 LLM 指标</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一个请求如何变成一次行动 · Agent 概论</title>
+<meta name="description" content="五步走完一轮：谁出主意、谁动手、谁把结果带回来。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#把一次请求摊在桌面上">把一次请求摊在桌面上</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="request-to-action" data-part="p0">
+    <p class="crumb"><a href="index.html">目录</a> / 入门 / 第 2 章</p>
+    <div class="prose-body">
+<h1>一个请求如何变成一次行动</h1>
+<p>用户输入「我的订单到哪了」，聊天框里只回来一句话。这句话背后其实发生了一串事。系统先把四段文字拼成这一轮最小的输入：系统指令、对话历史、工具说明、当前消息。第 4 章会把证据、记忆和输出预留也加进来，拆成七项；这里先看最小四段。</p>
+<p>模型读到的就是这些字，然后决定要不要查库。<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>代码拿着模型给出的参数去查数据库，结果被读回对话。最后系统决定继续查、直接回答，还是请用户补充信息。这套流程里任何一步出错，用户看到的都会是一句不可靠的回答。</p>
+<p><strong>一个直观的比喻</strong>：把这一轮循环想成一位助理接电话。先听清对方要什么，这是组装输入；自己判断下一步该不该查，这是决策。</p>
+<p>然后打电话去查，这是执行；把查到的情况记在本子上，这是观察；最后决定接着查还是直接回话，这是继续或停止。</p>
+<p><strong>正式定义</strong>：一次 <abbr class="term" tabindex="0" title="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。" data-tip="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。">智能体<span class="term-en">（Agent）</span></abbr> 运行，就是模型与运行时按这个循环交替往返的过程。模型负责输出决策，运行时代码负责校验、执行和回写结果，直到任务完成、受阻或达到<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-02/panel-1.webp" alt="第 2 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：一句话就能答完吧？</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-02/panel-2.webp" alt="第 2 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：我们把它拆成五步，一步一步来。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-02/panel-3.webp" alt="第 2 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小模：结果回来了，再决定下一步。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-02/panel-4.webp" alt="第 2 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小运：还差一步查政策。循环不是走一遍，是走到能停。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>Agent 的一轮工作可以拆成五步：组装<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>、决策、执行、观察、决定继续或停止。模型只负责决策，真正动手改变状态的是运行时代码。系统可靠，意味着另外四步也守住了：参数验过、权限查过、证据留过，并且能停得下来。</p>
+<h2 id="把一次请求摊在桌面上">把一次请求摊在桌面上</h2>
+<p>任务单上写着：“周五下午，为六个人订半小时讨论室。”系统要先记住人数、日期和时长。如果这个时间没有空房，能不能改晚一点，还得回头问用户。</p>
+<p>小模第一次拿到的输入，可以只包含这张任务单、预约规则和几个工具说明。它还不知道哪间房空着。小运（运行时程序）调用查询工具，带回两间候选房。这条新观察加进输入后，下一次判断才有事实依据。</p>
+<p>第二轮查到一间房已满，系统就排除它，再查另一间。失败的查询也留下了信息。沿着记录继续，最后可能订到房，也可能确认现有条件下没有合适的房间。</p>
+<h3 id="想过了与做过了留下不同记录">“想过了”与“做过了”留下不同记录</h3>
+<p>计划是一份待执行的安排。<abbr class="term" tabindex="0" title="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。" data-tip="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。">工具调用<span class="term-en">（Tool Call）</span></abbr>是准备交给程序的结构化请求。工具结果是程序实际返回的观察。最终答复则是把这些观察转成用户能理解的结论。四种记录不能互相顶替。</p>
+<p>假设候选时间是周五 16:00，预约接口却返回周四 16:00。调用格式虽然合法，结果仍不满足任务单。系统应停下来检查日期；接口返回“成功”，只说明调用完成，任务是否完成还要对照任务单。</p>
+<p>一次模型调用通常不会在等待用户回答时自己继续运行。运行时程序要保存问题与任务进度，等回复到来再恢复。暂停是一种正常状态，可以避免模型自行补上用户偏好。</p>
+<p>把这一轮记下来时，先问：如果查询没有空房，下一轮输入应该新增什么？应该保留“没有符合条件的房间”这一观察，并标明哪些约束还没有得到用户允许修改。</p>
+<h2 id="机制">机制</h2>
+<h3 id="四类请求四条路">四类请求，四条路</h3>
+<p>用一个本地订单助手做例子：模型是本地跑的十亿参数级小模型（1B），订单记录放在 SQLite 里，界面是一个笔记本输入框。它需要处理四类请求。</p>
+<ul><li>查订单状态：必须读数据库，不能凭印象回答。</li><li>介绍配送政策：读一段固定文档即可。</li><li>给出客服联系方式：直接返回固定文本。</li><li>请求不完整或不支持：先反问，不要猜。</li></ul>
+<p>四类请求看起来都是「回答问题」，实际走的路不同。查状态要拿到订单号，政策要拿到政策名，联系方式不需要外部数据，含糊的请求连该查什么都确定不了。系统要在收到请求时先分清是哪一类，证据不足就停下来。它们共用同一个五步循环，差别在决策走哪条路、执行时用哪些工具和证据。</p>
+<h3 id="输入里到底有什么">输入里到底有什么</h3>
+<p>一轮输入的样子如下，数字为示意：</p>
+<pre><code>[系统指令] 300 tokens
+你是订单助手。只查当前用户的订单；不确定时先问。
+
+[对话历史] 0 tokens
+（第一轮为空）
+
+[工具说明] 1,200 tokens
+lookup_order(order_id)：按订单号查状态，返回状态与处理天数。
+
+[当前消息] 20 tokens
+我的订单到哪了</code></pre>
+<p>模型看不到数据库，它看到的就是这四段文字。哪一段没拼进去，模型就当作不存在。这里只列了 <code>lookup_order</code>；需要查政策时，运行时会再把 <code>lookup_policy</code> 的说明拼进来。工具说明随本轮可用工具变化。</p>
+<h3 id="输入每轮都在变">输入每轮都在变</h3>
+<p>同一个窗口，三轮对话的占用完全不同。图 2.1 把三轮的占用画在一起。</p>
+<figure><img src="figures/context-assembly.svg?v=90aaa8ae5401" alt="图 2.1 · 三轮对话里，上下文窗口怎么被占满" loading="lazy" decoding="async"><figcaption>图 2.1 · 三轮对话里，上下文窗口怎么被占满</figcaption></figure>
+<ol><li>第 1 轮：指令 300、工具说明 1,200、当前消息 20，历史为空。已用 1,520，扣除 1,024 预留后还剩 5,648。</li><li>第 3 轮：历史涨到 1,900，已用 3,420，扣除预留后还剩 3,748。</li><li>第 6 轮：历史 4,600，已用 6,120，扣除预留后只剩 1,048。</li></ol>
+<p>变化来自三处：历史只增不减，工具结果也会写进历史，每轮输出还要预留 1,024。工具说明始终占着 1,200，哪怕这一轮根本不用查库。</p>
+<p><abbr class="term" tabindex="0" title="上下文工程（Context Engineering）：决定每一轮往上下文里放什么、拿掉什么、按什么顺序放。" data-tip="上下文工程（Context Engineering）：决定每一轮往上下文里放什么、拿掉什么、按什么顺序放。">上下文工程<span class="term-en">（Context Engineering）</span></abbr>决定每一轮往窗口里放什么、拿掉什么。</p>
+<aside class="character-note is-left" aria-label="小模的旁注">
+  <div class="note-inner">
+    <span class="note-frame"><img class="note-figure" width="280" height="472" src="assets/characters/mo-shy.webp" alt="" loading="lazy" decoding="async"></span>
+    <div class="note-bubble"><b>小模</b><p>第一步放什么？</p></div>
+  </div>
+</aside>
+<h3 id="五步循环">五步循环</h3>
+<p>把一次回答拆开，可以得到五个可检查的步骤。每一步都有明确产物和负责方，出问题时能定位到具体一层。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">步骤</th><th scope="col">产物</th><th scope="col">负责方</th><th scope="col">需要的能力</th></tr></thead><tbody><tr><td>组装（Assemble）</td><td>指令、证据、工具定义</td><td>运行时里的组装模块（上下文构建器）</td><td>检索、筛选、token 预算</td></tr><tr><td>决策（Decide）</td><td>一个工具调用请求，或一次直接回复/提问</td><td>模型</td><td>指令遵循、推理、结构化输出</td></tr><tr><td>执行（Execute）</td><td>校验过的服务请求</td><td>运行时与工具适配层</td><td>校验、权限、分发</td></tr><tr><td>观察（Observe）</td><td>工具返回的结果</td><td>运行时（写回）与模型（解释）</td><td>结果解释、证据保留</td></tr><tr><td>继续或停止</td><td>下一次调用、直接回复或转人工</td><td>运行时（控制器）</td><td>模型提议停止；控制器按预算、完成条件、用户状态裁决</td></tr></tbody></table></div>
+<p>上下文构建器是运行时里负责组装的那部分。本课程约定，<abbr class="term" tabindex="0" title="控制器（Controller）：运行时中检查预算与停止条件的组件，处理继续、等待和结束。下一阶段交给谁由编排器安排，结果是否合格由验收器判断。" data-tip="控制器（Controller）：运行时中检查预算与停止条件的组件，处理继续、等待和结束。下一阶段交给谁由编排器安排，结果是否合格由验收器判断。">控制器<span class="term-en">（Controller）</span></abbr>是运行时里管预算与停止的部分；模型可以提议“可以停了”，但接受与否由控制器判断。控制器负责预算与停止；策略检查、工具执行和验收由各自的模块完成。</p>
+<p>表里的顺序有依赖关系：后一步要用前一步的产物。模型看不到数据库，它只能看到组装时放进去的工具说明；运行时拿不到模型的意图，它只能看到模型输出的结构化请求。任何一层缺了产物，循环就断在那里。</p>
+<figure class="teaching-figure"><img src="figures/teach-agent-loop.svg?v=cd3bd60d8fa3" alt="图 2.2 · 五步循环与停止" loading="lazy" decoding="async"><figcaption>图 2.2 · 五步循环与停止</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>工具结果回来，模型就能接着判断了吗？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>结果要先写进下一轮输入。只留在日志或数据库里，模型这一轮仍然看不到。</p></aside>
+</div></figure>
+<p>图 2.2 与五步表一一对应。沿实线走一轮；新的结果写回后，再看“继续或停止”这处分支。需要用户补充时先等待，达到限额时保存进度并停止。</p>
+<h3 id="模型只负责决策">模型只负责决策</h3>
+<p>模型本身也由推理程序运行；这里的“负责决策”指它输出决策内容，进程仍由运行时掌管。</p>
+<p>模型看到的是一段文本：系统指令、对话历史、当前请求，以及每个工具的名字、用途和参数格式。它输出的通常是结构化请求，例如调用 <code>lookup_order</code>，参数是 <code>order_id: ORD-1002</code>；也可能直接给出答复或提问。它没有数据库连接，也没有权限。</p>
+<p>真正执行的是运行时代码。运行时先检查参数格式，再确认这个工具在本次运行里是否被允许，然后把请求交给对应的处理函数。处理函数访问数据库，把结果作为观察写回对话。</p>
+<p>这条分工线决定了 Agent 和聊天机器人的差别。聊天机器人把整段文本交给模型，模型把答案写出来。Agent 把决策权交给模型，把执行权留在软件里，才能校验参数、限制权限、留下证据。</p>
+<h3 id="把五步连起来走一遍">把五步连起来走一遍</h3>
+<p>下面按上面的分工，把订单助手的一轮教学运行走一遍。订单号、状态与政策条款都是示意，用来核对每一步的产物。</p>
+<ol><li>用户问「我的订单到哪了」，没有给订单号。</li><li>组装上下文：系统指令、最近几轮对话、<code>lookup_order</code> 和 <code>lookup_policy</code> 两个工具的说明。</li><li>模型判断缺订单号，先回复请用户提供订单号，或者从历史里找最近提到的订单。这里假设这是第 3 轮，前面的对话里已经出现过 <code>ORD-1002</code>。</li><li>模型输出调用：<code>lookup_order(order_id=&quot;ORD-1002&quot;)</code>。</li><li>运行时校验：参数格式通过，工具在允许列表里，当前用户有查询权限。</li><li>处理函数返回「处理中，已 6 天」。</li><li>观察写回对话。模型看到 6 天，判断需要查政策，于是输出 <code>lookup_policy(topic=&quot;processing_delay&quot;)</code>。</li><li>政策文档写「超过 5 天应转人工」。两条信息合起来，证据够了。</li><li>模型请求用户授权转人工。用户接受或拒绝；在用户回答前，这一轮停在“等待授权”状态。</li></ol>
+<p>这段链里有三个容易忽略的点。第一，第 6 步返回的「已 6 天」改变了第 7 步的决策：模型提议去查政策。第二，政策以工具或文档形式进入，模型不能凭空编规则。第三，有副作用的动作在第 9 步拿到授权之后才会执行。</p>
+<h3 id="失败时会发生什么">失败时会发生什么</h3>
+<p>假设模型没有从历史里找到订单号，直接编了一个 <code>ORD-9999</code>。运行时的校验能拦住格式不对的参数，但拦不住「格式对、订单不存在」这种情况。处理函数返回 <code>not_found</code>，这个结果作为观察写回，模型应转为请用户确认订单号。</p>
+<p>再假设模型把「配送政策」理解成「查订单」，调用参数填了订单号。校验能发现参数类型不对，返回一条明确的错误，模型据此重试。如果错误信息只写「失败」，模型没有足够信息修正，往往会在同一个错误上重复两三次。</p>
+<p>两类失败都卡在同一个地方：错误有没有以可理解的形式回到模型手里。</p>
+<h3 id="什么时候停">什么时候停</h3>
+<p>模型可以选择继续调用，也可以选择收尾，但「能不能停」由运行时里的控制器判定。控制器检查本次运行的预算与<abbr class="term" tabindex="0" title="验收器（Verifier）：依据事先约定的完成条件检查结果的组件，例如核对预约记录中的日期与人数。" data-tip="验收器（Verifier）：依据事先约定的完成条件检查结果的组件，例如核对预约记录中的日期与人数。">验收器<span class="term-en">（Verifier）</span></abbr>结论，同时响应用户取消、等待输入等事件。</p>
+<p>预算包括轮次上限和费用上限。完成条件是一组能判真假的检查项，例如「已经拿到订单状态，并且回答里引用了状态值」。用户是否还在等，决定要不要打断当前任务去处理新输入。</p>
+<p>验收未通过时，模型说「我完成了」也不能作为成功结论。预算耗尽或用户取消，则以相应原因结束，并说明未完成部分。</p>
+<aside class="character-note is-right" aria-label="小运的旁注">
+  <div class="note-inner">
+    <span class="note-frame"><img class="note-figure" width="280" height="472" src="assets/characters/yun-sigh.webp" alt="" loading="lazy" decoding="async"></span>
+    <div class="note-bubble"><b>小运</b><p>少一步就要从头再来，所以<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>按最坏情况留。</p></div>
+  </div>
+</aside>
+<h2 id="成本与限制">成本与限制</h2>
+<p>这套拆法有成本。每一步都要序列化和记录，一轮简单问答也会产生多次模型调用和多次工具往返。示意一下：两次模型调用各 1.2 秒，一次数据库查询 0.4 秒，串行下来约 2.8 秒。</p>
+<p>第二次模型调用要等查询结果，不能和第一次并行；能并行的是彼此独立的查询。如果任务里还有一份互不依赖的资料要查，把它和数据库查询一起发出，才可能缩短等待。</p>
+<p>成本还随轮次增长。每一轮都要把历史重新放进上下文，五轮之后输入可能是第一轮的好几倍。订单助手这种短任务不明显，长任务里这会变成主要开销。按输入 2 美元每百万 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr>、输出 10 美元每百万 token 算，一轮 3,000 输入加 200 输出约 0.008 美元；四轮加上重试，一次任务接近 0.04 美元。</p>
+<p>它也有明确的失效场景。模型可能选错工具，可能把参数填成听起来合理但实际不存在的值，也可能在证据不足时编一个结论。运行时通过校验、重试和拒绝处理这些失败。</p>
+<p>还有一类场景不适合这种循环。如果任务可以用固定流程稳定完成，写成普通函数就够了，引入 Agent 只会增加不确定性和成本。</p>
+<p>下一章打开“模型”这一步：看一段输入怎样变成 token，又怎样逐个生成输出。</p>
+<h2 id="自测">自测</h2>
+<ol><li>五步循环里，哪一步由模型负责，哪一步必须由软件负责？为什么不能互换？</li><li>订单例子中，「已处理 6 天」这个观察具体改变了什么决策？</li><li>模型编了一个不存在的订单号，运行时能拦住哪一部分、拦不住哪一部分？</li><li>一轮任务平均 4 次模型调用，每次输入 3,000 tokens、输出 200 tokens。输入按每百万 2 美元计价，输出按每百万 10 美元计价。一次任务大约多少钱？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2210.03629" rel="noreferrer">ReAct：交替推理、行动与观察</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-what-is-an-agent.html"><small>上一章</small><span>Agent 是什么：模型加工具</span></a>
+  <a class="nav-next" href="ch-token-generation.html"><small>下一章</small><span>一个 token 是怎么生成的</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

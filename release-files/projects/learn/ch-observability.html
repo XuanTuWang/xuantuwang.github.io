@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>可观测性与实验设计 · Agent 概论</title>
+<meta name="description" content="把每一步记成可回放的记录，出错时能按线索定位。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#一句失败了怎样变成能调查的问题">一句“失败了”怎样变成能调查的问题</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="observability" data-part="p2">
+    <p class="crumb"><a href="index.html">目录</a> / 系统 / 第 16 章</p>
+    <div class="prose-body">
+<h1>可观测性与实验设计</h1>
+<p>完成率从 71% 掉到 63%（假设数据），复盘时却发现，模型、提示词和<abbr class="term" tabindex="0" title="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。" data-tip="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。">技能包<span class="term-en">（Skill Package）</span></abbr>都在同一周换过。每一项都可能影响结果，单看两个总分分不清原因。需要把运行过程记下来，再用对照实验逐项比较。</p>
+<p>打个比方，<abbr class="term" tabindex="0" title="可观测性（Observability）：通过日志、指标和轨迹看出系统内部发生了什么。" data-tip="可观测性（Observability）：通过日志、指标和轨迹看出系统内部发生了什么。">可观测性<span class="term-en">（Observability）</span></abbr>像给一次运行装行车记录仪。每一步输入了什么、模型想做什么、工具返回了什么、验收怎么判，都按时间记成一串事件；出了问题能倒带回放，而不是对着最终结果猜。</p>
+<p><strong>正式定义</strong>：可观测性（Observability）是通过日志、指标和<abbr class="term" tabindex="0" title="轨迹（Trace）：一次运行从头到尾的记录，包含每一步的输入、动作和结果。" data-tip="轨迹（Trace）：一次运行从头到尾的记录，包含每一步的输入、动作和结果。">轨迹<span class="term-en">（Trace）</span></abbr>看出系统内部发生了什么。一次运行至少在运行入口、动作执行、验收三个边界留下记录；事件流要能按运行标识回放，失败时才能定位到具体环节。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-16/panel-1.webp" alt="第 16 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：为什么错了，看不出来。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-16/panel-2.webp" alt="第 16 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：打开 trace，按四象限慢慢看。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-16/panel-3.webp" alt="第 16 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：模型、骨架、任务、环境，逐个排查。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-16/panel-4.webp" alt="第 16 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：一次运行要能回放。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>可观测性要求把一次运行记成事件流，也就是按时间顺序记下每次输入、动作与判定，至少覆盖三个边界：运行入口、动作执行、验收。事件流能把「模型不行」和「反馈没送到」区分开。改进要用对照实验，同时换模型和<abbr class="term" tabindex="0" title="执行框架（Harness）：围绕模型搭建的循环、工具接入和检查代码。本课程用它指具体控制框架，用运行时指管理任务的执行环境。" data-tip="执行框架（Harness）：围绕模型搭建的循环、工具接入和检查代码。本课程用它指具体控制框架，用运行时指管理任务的执行环境。">运行时骨架<span class="term-en">（Harness）</span></abbr>时，分成四组归因。</p>
+<p>运行时骨架指模型外面的那套程序：<abbr class="term" tabindex="0" title="控制器（Controller）：运行时中检查预算与停止条件的组件，处理继续、等待和结束。下一阶段交给谁由编排器安排，结果是否合格由验收器判断。" data-tip="控制器（Controller）：运行时中检查预算与停止条件的组件，处理继续、等待和结束。下一阶段交给谁由编排器安排，结果是否合格由验收器判断。">控制器<span class="term-en">（Controller）</span></abbr>、<abbr class="term" tabindex="0" title="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。" data-tip="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。">工具调用<span class="term-en">（Tool Call）</span></abbr>、<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>组装和验收。结论要用多个随机种子重复跑，算清等待时间、总计算量与重复运行后仍然存在的增益。只报一个总分，改好和改坏都看不出来。</p>
+<h2 id="一句失败了怎样变成能调查的问题">一句“失败了”怎样变成能调查的问题</h2>
+<p>用户发现预约没有完成，只给一个错误提示，开发者不知道从哪里查起。系统需要把收到请求、模型选择、工具执行和状态核验的关键事件串起来，这就是可观测性的作用。</p>
+<p>日志按时间记下发生过的事。把同一任务的记录连起来，就能查到每次调用用了多久、停在哪里，以及后续动作受到了什么影响。</p>
+<h3 id="给失败留一条可追踪的线索">给失败留一条可追踪的线索</h3>
+<p>假设查询工具返回正常，但预约工具超时。记录应能区分这两次调用，保存它们对应的请求编号、状态和时长。只写“工具出错”会丢掉关键差别；记录请求编号、状态和时长就够，敏感资料不必抄进日志。</p>
+<p>小运可以先从最终状态倒推。没有预约记录，是从未发起调用，还是发起后失败？调用参数是否包含正确日期？返回结果是否被下一轮读取？沿这些边界查证，比只重读最终回答更有效。</p>
+<p>指标用来观察很多次任务的表现，具体记录则帮助调查其中某一次。平均耗时正常时，仍可能有少量请求等得很久。可以先按任务类别找出较慢的请求，再查看它们的运行记录。</p>
+<p>可复现需要保存影响结果的条件。模型版本、提示配置、工具版本、输入资料和评分规则发生变化，都可能让同一问题得到不同结果。随机种子是控制采样随机性的数，覆盖不了外部环境的变化。</p>
+<p>排查要能看到决策、执行和状态变化，才能定位错误发生在哪个边界。</p>
+<figure class="teaching-figure"><img src="figures/teach-trace.svg?v=6a8ac736ed7b" alt="图 16.1 · 关联记录怎样帮助定位问题" loading="lazy" decoding="async"><figcaption>图 16.1 · 关联记录怎样帮助定位问题</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>只写一句失败了，能查到原因吗？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>保留同一运行ID和调用编号，把请求、工具结果与后续处理串起来。</p></aside>
+</div></figure>
+<h2 id="机制">机制</h2>
+<h3 id="三个边界各记一份证据">三个边界各记一份证据</h3>
+<p>一次运行至少要在三处留下记录。三处合起来，才能回答「模型想做什么、系统做了什么、做成了没有」。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">边界</th><th scope="col">记什么</th><th scope="col">回答的问题</th></tr></thead><tbody><tr><td>运行入口</td><td>请求、配置、版本号</td><td>这次用的是哪套指令、哪个工具集？</td></tr><tr><td>动作执行</td><td>模型提议、动作标识、策略决策、结果或错误</td><td>模型想做什么，请求被允许了吗，实际做了什么？</td></tr><tr><td>验收</td><td>用例标识、版本、耗时、判定</td><td>判定为什么通过或不通过？</td></tr></tbody></table></div>
+<p>验收这个边界最容易漏。只记动作不记验收，失败之后分不清是动作改错了，还是验收标准本身过严。停止原因不放进验收，单独记在“运行结束”事件里；用户取消、<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>耗尽、解析失败混在一起，复盘时看不出到底卡在哪。</p>
+<p>字段越多，写入和查询越慢。先把三个边界的主键——能唯一找到一条记录的编号——固定下来：动作标识、运行标识、用例标识，其余字段按排查需要再加。记录要带时间与耗时，只看时刻分不清串行还是并行。</p>
+<h3 id="分母决定分数的含义">分母决定分数的含义</h3>
+<p>同一个数换分母，含义完全不同。假设一天的数据：200 次运行，共 1,000 次模型调用，其中 920 次调用成功。136 次运行完整走完，100 个用户里有 55 人当天任务全部完成。三个数分别是 92%、68%、55%。</p>
+<p>哪个数都真实，指向的问题不同。调用成功率低，先查工具和解析；运行完成率低，先查预算和验收；用户完成率低，先查任务难度和中断。对外只报其中一个，读者会把它当成整体能力。</p>
+<p>分母要写进报告，和周报一起固定下来。分母换了，历史数据就不能直接比。还有第四个分母，按动作算：成功动作除以总动作；重试多的系统动作总数更大，完成率会显得更低。周报里把前三个分母并排，第四个按动作单列，读者不容易被单个数字带走。</p>
+<h3 id="事件流把猜测变成定位">事件流把猜测变成定位</h3>
+<p>举一个具体的定位过程。账本导入修复上线后，验收在第二轮仍然不通过，账本还是 4 条记录，期望是 2 条。事件流里能看到两次验收的输入与输出，也能看到下一轮模型的完整输入。查下来的结果是：失败报告没有追加进下一轮对话消息，模型根本没收到「还是 4 条」这个反馈。</p>
+<p>这条结论改变了修复方向。没有事件流，团队会把它归因成「模型不会改代码」，然后去换更大的模型，钱花了，问题还在。</p>
+<p>事件流里最好带一个运行标识，跨服务时能串起同一轮的所有调用。事件流要能回放：按时间顺序重看每一次模型输入、每一次动作决策和每一次验收判定。只存一个通过率，事后无法重建当时看到的状态。回放时按运行标识取全部事件，再看第一个偏离预期的动作。</p>
+<h3 id="四象限把归因拆开">四象限把归因拆开</h3>
+<p>模型和运行时骨架同时换了，提升该记给谁。运行时骨架指模型外面的那套程序：控制器、工具调用、上下文组装和验收，也就是第 12–15 章讲的东西。做法是四组对照。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">组合</th><th scope="col">变的是</th><th scope="col">回答的问题</th></tr></thead><tbody><tr><td>当前模型配当前骨架</td><td>无</td><td>基线是什么</td></tr><tr><td>当前模型配候选骨架</td><td>骨架</td><td>骨架单独贡献多少</td></tr><tr><td>候选模型配当前骨架</td><td>模型</td><td>模型单独贡献多少</td></tr><tr><td>候选模型配候选骨架</td><td>两者</td><td>合起来是否叠加</td></tr></tbody></table></div>
+<p>四组跑完，才能把差值拆到两个变量上。两组之间若出现交互，例如新模型只在骨架换了之后才提升，差值相加会高估收益。</p>
+<p>算一笔成本。假设一组 200 个任务，每个任务平均 0.15 美元，四组一轮是 4×200×0.15 等于 120 美元。每组跑 3 个种子，总花费就是 120×3 等于 360 美元。这个成本会让团队倾向于只跑一组，结论也就只能停在「整体变好了」。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>C</mi><mtext>exp</mtext></msub><mo>=</mo><mn>4</mn><mo>×</mo><mn>200</mn><mo>×</mo><mn>0.15</mn><mo>×</mo><mn>3</mn><mo>=</mo><mn>360</mn><mtext> 美元</mtext></mrow><annotation encoding="application/x-tex">C_{\text{exp}} = 4 \times 200 \times 0.15 \times 3 = 360\text{ 美元}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">exp</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">200</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.15</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord">360</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">美元</span></span></span></span></span></span></div>
+<p>4 是模型与骨架的组合数，200 是每组任务数，0.15 是单任务成本，3 是种子数。</p>
+<p>四象限的代价不止钱。四组数据要有人对齐口径，任务集、评分规则、预算都要一致。口径不一致时，四组对照反而给出互相矛盾的结论。</p>
+<p>基线的方差也要一起报，方差就是基线自己每次跑的波动；至少报均值和范围。基线本身波动大时，四组差值也被放大。</p>
+<h3 id="边界回归测试注入故障">边界回归测试注入故障</h3>
+<p>功能测试回答「能不能用」，边界回归测试回答「坏的时候会怎样」。做法是注入故障。在动作执行完成、结果记录之前强制中断，然后断言三件事：恢复流程有没有把状态判对，预算有没有被重复扣，权限有没有被绕过。</p>
+<p>这类测试适合放在每次改动的门禁里。门禁就是合并或上线前的自动检查。注入点不用多，两三个关键位置就够：动作提交前后、验收判定前后、取消信号到达时。每个注入点配一条断言，比事后排查便宜。</p>
+<p>注入测试放在独立环境跑，避免把真实用户的数据写坏。注入故障的用例要定期回看。工具换了、存储换了，旧注入点可能打不到真实路径，断言通过却没有测到东西。</p>
+<h3 id="复现种子与三条账">复现：种子与三条账</h3>
+<p>一次实验变好，可能是方法改对了，也可能只是随机种子运气好。做法是同一方法换多个种子重复跑。举例：三个种子的提升分别是 1.8、-0.4、0.9 个百分点。平均提升 (1.8-0.4+0.9)÷3 约 0.77 个百分点，三次之间相差 2.2 个百分点。波动幅度和提升本身一个量级，单跑一次说「提升了」并不成立。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mover accent="true"><mi mathvariant="normal">Δ</mi><mo>ˉ</mo></mover><mo>=</mo><mfrac><mrow><mn>1.8</mn><mo>−</mo><mn>0.4</mn><mo>+</mo><mn>0.9</mn></mrow><mn>3</mn></mfrac><mo>≈</mo><mn>0.77</mn><mo separator="true">,</mo><mspace width="2em"/><msub><mi mathvariant="normal">Δ</mi><mi>max</mi><mo>⁡</mo></msub><mo>−</mo><msub><mi mathvariant="normal">Δ</mi><mi>min</mi><mo>⁡</mo></msub><mo>=</mo><mn>1.8</mn><mo>−</mo><mo stretchy="false">(</mo><mo>−</mo><mn>0.4</mn><mo stretchy="false">)</mo><mo>=</mo><mn>2.2</mn></mrow><annotation encoding="application/x-tex">\bar{\Delta} = \frac{1.8-0.4+0.9}{3} \approx 0.77, \qquad \Delta_{\max}-\Delta_{\min}=1.8-(-0.4)=2.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.8201em;"></span><span class="mord katex-accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8201em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord">Δ</span></span><span style="top:-3.2523em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">ˉ</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">3</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1.8</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.9</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord">0.77</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">i</span><span class="mtight">n</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.8</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">0.4</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">2.2</span></span></span></span></span></div>
+<p>Δ 是相对基线的百分点提升，横线表示三个种子的平均，后一项是极差。</p>
+<p>只改一处是复现的前提。同一周换模型、改提示词、加技能包，三件事叠在一起，任何提升都归不到具体改动上。改动要排队上线，每轮只留一个变量。种子数量按噪声大小定，波动大于提升时，3 个种子不够。</p>
+<p>算账要看三样。等待了多久，总计算量多少（例如 8 个 GPU 小时加 120 万个 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr>），哪些提升在重复运行后仍然存在。前两样是成本，第三样才是收益。更快的运行可能烧掉更多资源，只看等待时间会得出反向结论。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>埋点——在关键位置记录事件——会带来延迟与存储开销；每个动作都要序列化（把事件转成可存储的格式）和落盘。成本可以估算：假设每个动作记 800 字节，一次运行 5,000 个动作，单次运行约 4 MB。每天 200 次运行就是 800 MB。</p>
+<p>若按运行随机保留 10%，期望保留约 20 次、共 80 MB。这个比例会漏掉部分低频故障记录，需要另设失败保留规则。</p>
+<p>采样要按失败分层。成功的运行可以多采少存，失败的运行全量保留。否则最容易丢的恰好是出问题的那一小部分。</p>
+<p>采样口径要写清：上述 10% 是选取完整运行，选中的一次仍有 5,000 条动作记录。排查时先按任务和失败类型查询，再沿运行编号查看过程。</p>
+<p>长任务的事件流会长到无法直接看，通常要靠查询和分层采样。</p>
+<p>四象限对照的代价是实验数量翻倍。模型越贵，越难把所有组合跑全，很多结论往往只能停在「当前组合有效」。</p>
+<p>多随机种子重复跑的前提是运行可复现。提示词、工具版本、缓存状态没固定住，换种子测到的差异主要来自环境；缓存状态指上一次运行留下的缓存，它可能让这次变快或变准。</p>
+<p>事件流还会暴露隐私。模型输入里可能带用户数据，日志保留多久、谁能查，要提前定规则，否则排查工具本身成了数据泄露的口子。</p>
+<p>观测系统的维护成本也要算。字段定义、采样规则、查询语句要随代码变更同步更新，没人维护的事件流半年后就读不懂了。</p>
+<p>事件流告诉你失败发生在哪一步；这个失败要不要修，要回到业务成本和风险判断。</p>
+<h2 id="自测">自测</h2>
+<ol><li>三个记录边界分别回答什么问题？为什么停止原因也要记？</li><li>一组 200 个任务、每个 0.15 美元，四象限各跑 3 个种子要花多少钱？</li><li>三个种子提升 1.8、-0.4、0.9 个百分点，平均是多少？为什么不能凭一次运行宣布提升？</li><li>边界回归测试断言哪三件事？为什么注入点要定期回看？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2308.03688" rel="noreferrer">交互环境中的智能体评估</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-durable-state.html"><small>上一章</small><span>持久状态、崩溃窗口与恢复对账</span></a>
+  <a class="nav-next" href="ch-tool-skill-e2e-eval.html"><small>下一章</small><span>工具、技能与端到端评估</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

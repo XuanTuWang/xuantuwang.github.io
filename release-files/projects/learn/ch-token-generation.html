@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一个 token 是怎么生成的 · Agent 概论</title>
+<meta name="description" content="文字先切成 token，再一个一个选出下一个词。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#文字先变成什么模型才能计算">文字先变成什么，模型才能计算</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="token-generation" data-part="p0">
+    <p class="crumb"><a href="index.html">目录</a> / 入门 / 第 3 章</p>
+    <div class="prose-body">
+<h1>一个 token 是怎么生成的</h1>
+<p>假设接口返回的账单写着：输入 1,024 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr>，输出 96 tokens。输入里你只写了一句十五个字的请求，其余是<abbr class="term" tabindex="0" title="系统提示（System Prompt）：应用给模型的高优先级任务规则，说明角色、范围与输出要求。" data-tip="系统提示（System Prompt）：应用给模型的高优先级任务规则，说明角色、范围与输出要求。">系统提示<span class="term-en">（System Prompt）</span></abbr>、两个工具定义和五轮历史。模型回的那两句话，也被折算成了 96 个 token。字数与 token 数对不上，价格却按 token 收。要弄清这笔账，得先看清模型生成一个 token 时到底做了哪些事。</p>
+<p>打个比方，模型读文字不像人逐字默读，更像把整段话拆成一块块标准拼图，再一块块往外拼。每一块拼图就是一个词元（Token）。</p>
+<p><strong>正式定义</strong>：词元（Token）是模型读写文本时使用的最小单位，可以是一个词、词的一部分、标点或空白。模型先把输入切成 token，逐个计算，再一次生成一个新的 token，直到停下。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-03/panel-1.webp" alt="第 3 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：整篇文档，一起塞进去！</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-03/panel-2.webp" alt="第 3 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>机器卡住了，账单还在往上涨。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-03/panel-3.webp" alt="第 3 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：切成 token，再逐个采样，别急。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-03/panel-4.webp" alt="第 3 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：原来每个 token 都要算钱。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>一次生成分五段：分词、查表与位置、<abbr class="term" tabindex="0" title="注意力（Attention）：给不同位置的信息计算权重并汇合的机制。权重分给输入位置；输出词元的概率由后面的输出层给出。" data-tip="注意力（Attention）：给不同位置的信息计算权重并汇合的机制。权重分给输入位置；输出词元的概率由后面的输出层给出。">注意力<span class="term-en">（Attention）</span></abbr>、前馈、打分与采样。参数在一轮里固定，变化的只有前缀。前四段基本是确定性计算，最后一段才引入随机性。<abbr class="term" tabindex="0" title="温度（Temperature）：调整采样分布尖锐程度的参数。较低时更集中于高分候选，较高时分布更平缓。" data-tip="温度（Temperature）：调整采样分布尖锐程度的参数。较低时更集中于高分候选，较高时分布更平缓。">温度<span class="term-en">（Temperature）</span></abbr>与 <abbr class="term" tabindex="0" title="核采样（Nucleus Sampling）：先按概率排序，保留累计概率达到阈值的一组候选，再从中采样。候选数量随分布变化。" data-tip="核采样（Nucleus Sampling）：先按概率排序，保留累计概率达到阈值的一组候选，再从中采样。候选数量随分布变化。">核采样<span class="term-en">（Nucleus Sampling）</span></abbr> 决定从概率分布里怎么挑，终止由结束符、长度上限或外部规则判定。这五段的形状决定了成本：序列越长，注意力越贵，缓存越占<abbr class="term" tabindex="0" title="显存（GPU Memory）：图形处理器上的存储空间，常用于模型权重、中间张量和缓存。实际占用还受上下文长度与并发等因素影响。" data-tip="显存（GPU Memory）：图形处理器上的存储空间，常用于模型权重、中间张量和缓存。实际占用还受上下文长度与并发等因素影响。">显存<span class="term-en">（GPU Memory）</span></abbr>。</p>
+<h2 id="文字先变成什么模型才能计算">文字先变成什么，模型才能计算</h2>
+<p>计算机保存文字时使用编码，模型处理文字时还会再分成自己的单位。这个单位叫 token。它可能是一整个常见词，也可能是词的一部分、一个标点或一段空白。具体怎么切，取决于<abbr class="term" tabindex="0" title="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。" data-tip="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。">分词器</abbr>（tokenizer）。</p>
+<p>可以把分词器理解为一套固定的拼片字典。分词器（tokenizer）把句子拆成字典里的拼片，再给每片编一个号；小模拿到的是这串编号。编号用来查字典里的条目。两个编号挨得近，它们对应的词也可能毫不相关。</p>
+<p><abbr class="term" tabindex="0" title="嵌入（Embedding）：把词元、文本等对象映射成可计算向量的方法或表示。向量的编号、维度和相似度含义需要按具体模型解释。" data-tip="嵌入（Embedding）：把词元、文本等对象映射成可计算向量的方法或表示。向量的编号、维度和相似度含义需要按具体模型解释。">嵌入<span class="term-en">（Embedding）</span></abbr>表把编号换成一排学到的数字，供后续计算使用。模型查表后取出的这排数字叫<abbr class="term" tabindex="0" title="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。" data-tip="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。">向量</abbr>（embedding vector）。你可以先把它当作一组可计算的特征；真实向量的各维通常没有人工规定的“颜色”“大小”等名称。</p>
+<h3 id="一次只选一个为什么仍然能写长文">一次只选一个，为什么仍然能写长文</h3>
+<p>下面用假设的分词方式演示一次预测。假设“关”和“打”各占一个 token。给定“请把灯”，下一 token 为“关”的概率是 0.5，为“打”的概率是 0.3，其余候选合计 0.2。</p>
+<p>模型在采样步骤选出一个 token，把它接在已有文本后面，再算下一个。前面选了“关”，后续候选就会与选了“打”时不同。长回答这样逐步生成；每一步都会利用可用的<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>，经过多层计算。</p>
+<p>同样的输入也可能生成不同续写。调低温度会让采样更集中于高分候选；调高温度会让候选分布更平缓。</p>
+<p>停一下，想想：词表编号、嵌入向量、下一词概率分别做什么？它们依次负责标识单位、提供可计算特征、描述候选输出。</p>
+<p>下图分开列出词元、编号与向量。切分方式、编号和二维数值都是教学示意，用来说明查表关系。</p>
+<figure class="teaching-figure"><img src="figures/teach-token-embedding.svg?v=4aa692db49af" alt="图 3.1 · 编号与嵌入的区别" loading="lazy" decoding="async"><figcaption>图 3.1 · 编号与嵌入的区别</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>编号相近，意思也相近吗？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>编号只用于查条目。<abbr class="term" tabindex="0" title="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。" data-tip="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。">向量<span class="term-en">（Vector）</span></abbr>是查表得到的数值表示，含义是否相近要用适当的方法比较。</p></aside>
+</div></figure>
+<h2 id="机制">机制</h2>
+<h3 id="五段流水线">五段流水线</h3>
+<p>一次推理可以写成五段：分词、表示、注意力、前馈、打分与采样。第一段决定输入长什么样，中间三段做计算，最后一段产出 token。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">段落</th><th scope="col">输入</th><th scope="col">输出</th><th scope="col">关键组件</th></tr></thead><tbody><tr><td>分词</td><td>一段文本</td><td>token ID 序列</td><td>分词器与合并表</td></tr><tr><td>表示</td><td>token ID</td><td>[B,T,d] 特征</td><td>嵌入查表与位置编码</td></tr><tr><td>注意力</td><td>特征矩阵</td><td>带上下文的特征</td><td>多头注意力与残差</td></tr><tr><td>前馈</td><td>特征矩阵</td><td>逐位置变换后的特征</td><td>层归一化（LayerNorm）与前馈网络</td></tr><tr><td>打分与选择</td><td>最后一个位置的向量</td><td>下一个 token</td><td>输出投影与采样</td></tr></tbody></table></div>
+<p>每段都有明确的产物。分词产出整数序列，表示段把它变成形状 [B,T,d] 的张量：B 是批大小，T 是序列长度，d 是每一维特征的宽度。注意力段让每个位置读到前面的内容，前馈段做逐位置变换，最后一段只取最后一个位置的向量打分。</p>
+<p>如图 3.2 所示，五段里只有最后一段引入随机性。前面四段在相同模型、相同硬件、相同批处理、固定随机种子的条件下基本固定；浮点和并行计算仍可能带来细微差异，但主要随机来源在最后的采样。</p>
+<figure><img src="figures/teach-token-pipeline.svg?v=274f7d6dc53c" alt="图 3.2 · 生成一个词元的五个计算环节" loading="lazy" decoding="async"><figcaption>图 3.2 · 生成一个词元的五个计算环节</figcaption></figure>
+<p>图 3.2 与上表使用同一套名字：分词、表示、注意力、前馈、打分与选择。选出的词元接回已有文本，模型再据此计算下一个词元。</p>
+<p>五段是逻辑划分；工程实现会把相邻算子融合成一个核函数，对外观察到的仍然是这五段的输入与输出。</p>
+<h3 id="分词把文本变成整数">分词：把文本变成整数</h3>
+<p>Token 是模型读写的最小单元，可以是一个词、一个词片段、一个空格，甚至一个字节。分词器给每个单元分配一个整数 ID，ID 本身不带语义。</p>
+<p>主流做法是字节对编码（Byte Pair Encoding，BPE）。它统计相邻单元的出现频率，反复合并最高频的一对，把词表控制在约 5 万条。</p>
+<p>例：「A kitten sleeps.」会被切成 A、kitten、sleeps 与句点四段。四段分别对应 8、214、67、3 四个 ID（编号为示意）。</p>
+<p>回到开头那句十五个字的请求。按中文平均每字 1.5 个 token 算（教学假设；随分词器变化，较新的中文分词器常低于此），它自己约 23 个 token，剩下的一千个左右是系统提示、工具说明与历史。账单里最贵的部分，往往是用户看不见的那一段。</p>
+<p>切法直接影响账单。假设（示意）一段 2,000 字的中文政策文档，切法 A 平均每字 1.5 个 token，得到 3,000 token。切法 B 平均每字 1.9 个 token，得到 3,800 token。两个助手每天各调用一万次，都把这段文档放进输入，输入价按每百万 2 美元算。</p>
+<p>切法 A 每天是 3,000 × 10,000 = 30,000,000 token，合 60 美元。切法 B 是 38,000,000 token，合 76 美元。差出来的 16 美元，全部来自平均分词长度。</p>
+<p>分词还决定模型在细节上的「视力」。同一个订单号 <code>ORD-1002</code>，有的分词器切成 <code>ORD</code>、<code>-</code>、<code>1002</code> 三段，有的把 <code>1002</code> 再拆成四个单独数字。数字被切碎时，模型数位比对的难度上升，账单也变长（推断）。</p>
+<p>语言之间的差距同样明显。中文常用字三千多个，一个汉字在多数分词器里占 1 到 2 个 token。同一句意思换成英文写，token 数通常更少（推断）。</p>
+<p>在宽度 d 不变、只扩大词表的条件下，切分粒度会变粗。同一段文本通常得到更少的 token，序列长度下降；但嵌入矩阵从 [5 万, d] 变成 [10 万, d]，输出层同倍增长，显存不一定省。要按词表、维度与序列长度一起算。</p>
+<h3 id="查表与位置">查表与位置</h3>
+<p>嵌入层做的是查表：用 token ID 去一个 [V,d] 的矩阵里取一行，V 是词表大小。查表主要是访存，通常不计入浮点运算；若实现做类型转换或<abbr class="term" tabindex="0" title="量化（Quantization）：用更少的位数存权重，比如 16 位压到 4 位，省显存但可能掉精度。" data-tip="量化（Quantization）：用更少的位数存权重，比如 16 位压到 4 位，省显存但可能掉精度。">量化<span class="term-en">（Quantization）</span></abbr>反量化，仍可能有额外计算。代价落在参数与内存上。</p>
+<p>用一个小模型举例：词表 2,048、宽度 128、序列长度 16。ID 序列 [1,16] 查表后变成 [1,16,128]。这张表本身的<abbr class="term" tabindex="0" title="参数量（Parameter Count）：模型中参数数值的数量，常用B表示十亿。" data-tip="参数量（Parameter Count）：模型中参数数值的数量，常用B表示十亿。">参数量<span class="term-en">（Parameter Count）</span></abbr>是 2,048 × 128 = 262,144 个，半精度下每参数 2 字节，约 0.5 MiB。词表翻倍，这张表也跟着翻倍，与序列多长无关。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>X</mi><mo>=</mo><mi>E</mi><mo stretchy="false">[</mo><mtext>ids</mtext><mo stretchy="false">]</mo><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><mi>B</mi><mo>×</mo><mi>T</mi><mo>×</mo><mi>d</mi></mrow></msup><mo separator="true">,</mo><mspace width="2em"/><mi mathvariant="normal">∣</mi><mi>E</mi><mi mathvariant="normal">∣</mi><mo>=</mo><mi>V</mi><mo>×</mo><mi>d</mi></mrow><annotation encoding="application/x-tex">X = E[\text{ids}] \in \mathbb{R}^{B \times T \times d}, \qquad |E| = V \times d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="mopen">[</span><span class="mord text"><span class="mord">ids</span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1.1491em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight">d</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span></div>
+<p>E 是嵌入表，ids 是 [B,T] 的编号，X 是 [B,T,d] 的向量。|E| 是表的参数量，只由词表与宽度决定。</p>
+<p>只查表不够，还要告诉模型位置。词序一变，语义就变。现代模型多在注意力内部注入位置。示例的小模型用旋转位置编码：按位置给查询和键分别旋转一个角度，位置信息写进点积里，不新增参数表。</p>
+<p>它的边界在长度外推。<abbr class="term" tabindex="0" title="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。" data-tip="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。">训练<span class="term-en">（Training）</span></abbr>时见过 8,192 个位置，推到 16,384 时角度组合是没见过的，注意力的分数会变得不可靠（推断）。</p>
+<h3 id="注意力与前馈">注意力与前馈</h3>
+<p>注意力让每个位置读到前面的信息：查询与键做点积，<abbr class="term" tabindex="0" title="softmax（Softmax）：把一组分数变成总和为1的非负权重的运算。这里用于注意力权重和候选词元概率。" data-tip="softmax（Softmax）：把一组分数变成总和为1的非负权重的运算。这里用于注意力权重和候选词元概率。">softmax</abbr> <abbr class="term" tabindex="0" title="归一化（Normalization）：按约定方式调整数值尺度的操作，例如 LayerNorm 对每个位置的特征做归一化。" data-tip="归一化（Normalization）：按约定方式调整数值尺度的操作，例如 LayerNorm 对每个位置的特征做归一化。">归一化<span class="term-en">（Normalization）</span></abbr>（把一组分数换算成总和为 1 的概率），再对值加权求和。这一步的形状是 [B,T,d] 进、[B,T,d] 出。</p>
+<p>成本有两块。投影矩阵在宽度上做乘法，宽度翻倍，参数涨四倍。宽度 128 时，查询、键、值、输出四个投影合计 4 × 128² = 65,536 个参数。</p>
+<p>分数矩阵在长度上做乘法，长度翻倍，元素涨四倍：序列长度 16 时，一层一个头的分数矩阵有 16 × 16 = 256 个元素。长度换成 8,192，元素数是 8,192 × 8,192 = 67,108,864 个，是前者的 262,144 倍。长上下文里，后一块会成为主导。</p>
+<p>前馈网络负责逐位置的变换。示例用 SwiGLU（一种带门控的前馈结构），宽度扩张比取 8/3，三个矩阵的参数量合计约 8d²；宽度 128 时约 131,072 个（第 19 章配置取 d_ff=344，实际为 132,096），比注意力投影还多一倍。短序列时，它反而是浮点运算最多的一块。</p>
+<p>两块成本计的东西不同：一块数参数，一块数临时张量。长度 8,192 时，单头单层的分数矩阵按半精度算要 67,108,864 × 2 字节，约 128 MiB。朴素实现会把整块矩阵留在显存，多头与多层再乘上去，峰值很快见底。</p>
+<p>FlashAttention 等分块实现不必保存完整的 T×T 分数矩阵。它逐块计算并更新归一化结果，但乘加次数仍随 T² 增长。逐词生成时，还需要保存随前缀长度增长的<abbr class="term" tabindex="0" title="键值缓存（Key-Value Cache）：缓存已经算过的键和值，生成下一个 token 时不用把整段前缀重算一遍。" data-tip="键值缓存（Key-Value Cache）：缓存已经算过的键和值，生成下一个 token 时不用把整段前缀重算一遍。">键值缓存<span class="term-en">（Key-Value Cache）</span></abbr>。</p>
+<h3 id="从-logits-到-token">从 logits 到 token</h3>
+<p>最后一步只取序列最后一个位置，经输出投影变成词表大小的 <abbr class="term" tabindex="0" title="logits（Logits）：模型给各候选词元的原始分数，经 softmax 转换为概率后可用于采样。" data-tip="logits（Logits）：模型给各候选词元的原始分数，经 softmax 转换为概率后可用于采样。">logits</abbr>。logits 是未归一化的原始分数，可以取任意实数。</p>
+<p>温度除在分数上，再过一遍 softmax。温度小于 1 分布更尖，大于 1 更平，取最高项的做法不受温度影响。拿三个候选、分数 2、1、0 算一遍。温度 0.5 时，分数变成 4、2、0，取指数得 54.60、7.39、1.00，总和 62.99，最高项占 86.7%。温度 2 时，分数变成 1、0.5、0，取指数得 2.72、1.65、1.00，总和 5.37，最高项降到 50.6%。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>p</mi><mi>i</mi></msub><mo>=</mo><mfrac><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><mi mathvariant="normal">/</mi><mi>τ</mi><mo stretchy="false">)</mo></mrow><mrow><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>V</mi></munderover><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>z</mi><mi>j</mi></msub><mi mathvariant="normal">/</mi><mi>τ</mi><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">p_i = \frac{\exp(z_i/\tau)}{\sum_{j=1}^{V}\exp(z_j/\tau)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.734em;vertical-align:-1.307em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.1288em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9812em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.307em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>z_i 是第 i 个候选的 logit，τ 是温度，V 是词表大小。τ 越小，大的 logit 被放得越大。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">策略</th><th scope="col">做法</th><th scope="col">特点</th></tr></thead><tbody><tr><td>贪心</td><td>直接取概率最高的 token</td><td>稳定、机械</td></tr><tr><td>Top-k</td><td>在前 k 个候选里按概率采样</td><td>候选集固定</td></tr><tr><td>Top-p</td><td>累积概率到阈值再采样</td><td>候选集随分布变化</td></tr><tr><td>随机采样</td><td>按完整分布采样</td><td>多样性最强</td></tr></tbody></table></div>
+<p>Top-p 的截断也能手算。假设四个候选的概率是 0.5、0.3、0.15、0.05，阈值取 0.8。前两项累积刚好 0.8，候选集只留这两项，重新归一化后是 0.625 与 0.375。阈值取 0.9，前三个候选累积到 0.95 才越过阈值，候选集变成三项。</p>
+<p>采样出 token 后，它被追加到前缀，下一次生成重新走一遍五段。终止有三种：生成结束符、达到长度上限、外部规则判定完成。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>自回归（autoregressive）意味着不能回头改：每生成一个 token，就把它接回输入，再生成下一个；已经发出的 token 会成为下一轮的输入，早期错误会被后续内容放大（推断）。一个具体的样子：模型先写出「订单已签收」，后面补的发货时间、签收人、快递单号都顺着这个前提编。要纠正，只能删掉整段重写。</p>
+<p>采样带来不可复现。同一输入两次生成可能不同，<abbr class="term" tabindex="0" title="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。" data-tip="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。">评估<span class="term-en">（Evaluation）</span></abbr>时必须固定温度与随机种子。温度设成 0 也有代价：贪心<abbr class="term" tabindex="0" title="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。" data-tip="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。">解码<span class="term-en">（Decoding）</span></abbr>在长输出里容易陷入重复，同一句话连着出现三四次。</p>
+<p>还有一个字符层面的失败。温度偏高时，模型把 <code>ORD-1002</code> 写成 <code>ORD-1OO2</code>，数字零被换成字母 O。这类错误在字符层面很像，正则校验能拦住；拦不住的是另一种，<code>ORD-1002</code> 被写成合法的 <code>ORD-1003</code>。</p>
+<p>长度是成本的主因。注意力分数的数量随长度平方增长。键值缓存（KV cache）存下已经算过的键和值，其容量随长度线性增长。<a href="ch-inference-economics.html">第 21 章</a>会算出它们各自的成本。流式输出还带来一个隐性限制：用户已经在读前 20 个字时，这 20 个字收不回来，发现错了只能另发一条更正。</p>
+<p>token 是计量单位；下一章把 token 放回窗口，算一次调用能装多少、该装什么。</p>
+<h2 id="自测">自测</h2>
+<ol><li>五段流水线中，哪一段引入随机性，为什么其他段没有？</li><li>词表从 5 万扩到 10 万，序列长度与显存各自怎么变？</li><li>为什么温度调高会让同一问题的两次回答不同？</li><li>用正文的数字重算：序列长度 8,192 时，一层一头的分数矩阵有多少元素？它是长度 16 时的多少倍？若宽度取 128，注意力四个投影的参数合计是多少？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/1706.03762" rel="noreferrer">Transformer 原论文</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-request-to-action.html"><small>上一章</small><span>一个请求如何变成一次行动</span></a>
+  <a class="nav-next" href="ch-context-budget.html"><small>下一章</small><span>上下文预算：一次推理里装什么</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

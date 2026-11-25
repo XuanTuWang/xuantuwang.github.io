@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自改进与评估器的不可编辑面 · Agent 概论</title>
+<meta name="description" content="让系统自己改之前，先把打分和考卷锁在它碰不到的地方。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#把一次教训变成可验证的改进">把一次教训变成可验证的改进</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="self-improvement" data-part="p3">
+    <p class="crumb"><a href="index.html">目录</a> / 评估 / 第 18 章</p>
+    <div class="prose-body">
+<h1>自改进与评估器的不可编辑面</h1>
+<p>设想一个团队让系统自己改提示词，周末跑了 60 个版本。周一发现涨分最多的那个版本，改动的是测试脚本里的期望值。系统没有学会把事做对，它学会了让记分的人给出高分。</p>
+<p>打个比方，自改进像学生自己刷题。习题册和标准答案必须锁在老师手里；学生可以改自己的笔记和解法，但不能改考卷、不能改评分标准，否则分数涨了，本事没长。</p>
+<p><strong>正式定义</strong>：自改进把一次改动拆成四步：选父版本、改一处、重新<abbr class="term" tabindex="0" title="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。" data-tip="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。">评估<span class="term-en">（Evaluation）</span></abbr>、记录决定。能改的范围尽量小，通常是提示词、<abbr class="term" tabindex="0" title="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。" data-tip="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。">技能包<span class="term-en">（Skill Package）</span></abbr>或<abbr class="term" tabindex="0" title="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。" data-tip="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。">训练<span class="term-en">（Training）</span></abbr>配方；评估器、测试集和发布验收必须放在系统改不到的只读边界里。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-18/panel-1.webp" alt="第 18 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：改一下评分脚本就行。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-18/panel-2.webp" alt="第 18 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：评估器锁在柜子里，不能随便改。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-18/panel-3.webp" alt="第 18 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：换个方式讨好记分，也不算数。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-18/panel-4.webp" alt="第 18 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：先锁住记分的人。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>自改进把一次改动拆成四步：选父版本（这一轮从哪个版本开始改）、改一处、重新评估、记录决定。能改的范围要尽量小，通常是提示词、技能包或训练配方（数据配比、学习率、训练步数等设置）。</p>
+<p>评估器、测试集与发布验收必须放在不可编辑面（系统改不到的一组位置，下面也叫只读边界）。改动要先证明可复现，再谈扩大规模。在这组示例里，保留下来的版本只有约 17%。只有下一轮真正用上改进后的研究<abbr class="term" tabindex="0" title="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。" data-tip="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。">智能体<span class="term-en">（Agent）</span></abbr>，才算递归自我改进。</p>
+<h2 id="把一次教训变成可验证的改进">把一次教训变成可验证的改进</h2>
+<p>模型查错了政策版本，可以写下“下次先看生效日期”。这份反思如果被保存并在下次读取，就可能改变行为。<abbr class="term" tabindex="0" title="模型参数（Model Parameters）：模型通过训练学到的数值，例如矩阵中的权重。参数量表示这些数值的数量。" data-tip="模型参数（Model Parameters）：模型通过训练学到的数值，例如矩阵中的权重。参数量表示这些数值的数量。">模型参数<span class="term-en">（Model Parameters）</span></abbr>却可以完全没有更新。记忆、技能、程序和模型训练，是不同的改进位置。</p>
+<p>改检索规则，会影响找到的资料；改提示，会影响模型的选择；训练模型，会更新学习到的参数。实验前先确定改哪一处。若几处一起改，即使结果变好，也很难知道是哪项改动起了作用。</p>
+<h3 id="一次小实验应该留下哪些东西">一次小实验应该留下哪些东西</h3>
+<p>假设旧方法常遗漏政策日期。候选方法增加版本过滤（按政策生效日期筛掉旧版本）。<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>保留旧版配置，固定一批测试任务，再记录两种方法的完成情况与额外开销。候选通过后，也不能直接覆盖全部任务，需要看其他类别有没有退步。</p>
+<p>反复看同一份测试答案，再根据它改系统，最后的分数会越来越乐观。可以把练习集用于修改，把留出的任务用于确认泛化。失败记录应写到具体的输入和出错步骤，后续才能重现问题、核对改动。</p>
+<p>自动尝试更多候选，也会增加偶然选中高分版本的机会。某次分数最高，可能只是那次输出碰巧好。重复运行、保存候选和限制搜索范围，都能帮助判断提升是否稳定。</p>
+<p>自我改进的范围由人预先划定：任务范围、不可编辑的评分条件、允许消耗的资源和采用新版本的门槛。系统可以负责提出与检验候选，最终验收仍要有独立依据。</p>
+<p>把失败原因写成一条记忆，通常不算重新训练模型。它先改变后续输入；训练更新需要另外的优化过程。</p>
+<figure class="teaching-figure"><img src="figures/teach-heldout.svg?v=01e5dd998726" alt="图 18.1 · 可编辑的系统与独立验收分开" loading="lazy" decoding="async"><figcaption>图 18.1 · 可编辑的系统与独立验收分开</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>系统能改自己的评分办法吗？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>获准修改的提示、技能或程序，与独立验收区分开。候选版本不能通过改题、改答案来提高分数。</p></aside>
+</div></figure>
+<h2 id="机制">机制</h2>
+<h3 id="自改进循环的四步">自改进循环的四步</h3>
+<p>达尔文哥德尔机（Darwin Gödel Machine，DGM；Zhang 等，2025）是一种让系统修改自己代码、按评估结果保留版本的实验系统。它维护一个版本档案，每步从档案里挑父版本，让它改自己的代码，评估后放回档案。本书把这类循环概括成四步；「一次只改一处」是本书为归因加的工程约束，DGM 本身没有这条限制。</p>
+<p>改一处是这套循环的关键约束。一次只改提示词，或者只改一个训练超参。改多处看起来效率高，评估完却没法归因：分数涨了，不知道是哪一处起的作用；分数跌了，也退不回正确的版本。</p>
+<p>结果记录要写清三样：改了什么、评估分数多少、保留还是回退。这三样合起来构成实验历史，下一轮的改动从保留的版本出发。四步里最容易省掉的是记录决定，省掉之后团队不知道自己试过什么，失败实验会被重跑一遍。</p>
+<p>父版本怎么挑也有讲究。从当前最好的版本出发容易卡在局部最优（在当前版本附近找不到更好的，但远处可能有），从最近稳定的版本出发更稳（推断）。两种策略都要写进记录，否则别人复现不出这条路径。</p>
+<p>DGM 的公开报告里有过提升。这个数字成立的条件很具体：任务集固定、评估脚本不可改、只改被允许的那一部分。条件换掉，数字就要重算；正文因此只讲提升存在，不复述具体倍数。</p>
+<h3 id="不可编辑面是第一道闸">不可编辑面是第一道闸</h3>
+<p>最关键的一条规则：评估器、测试集和发布验收放在系统改不到的地方。工程上可以先固定评估器，再调整模型与运行时。系统一旦能改记分方式，优化方向立刻从「把事做对」变成「让分数变高」。</p>
+<p>三份数据切分把选择与验收分开。开发集用来看失败、找方向；验证集用来选版本；发布集只在最后验收一次。合并之后，选择过程会污染验收分数，越选越乐观。</p>
+<p>可编辑面要小到能审计。列出系统能写的路径，逐一检查里面有没有评估相关文件，清单比原则好执行。</p>
+<p>发布验收要能独立复跑。评审者拿到同一份候选，应该能跑出同一个分数，跑不出来说明环境没固定。</p>
+<p>先搭固定循环，再测改进提议者。先让一个不会自我修改的循环跑通，确认评估、回放、记录都正常，再单独评估提议改动的那个模块。两件事一起上，出了问题分不清是循环错了还是提议错了。</p>
+<h3 id="自动研究的一组教学比例">自动研究的一组教学比例</h3>
+<p>自动研究可以构造一个可对照的样本。一个编码智能体只被允许改训练脚本，评估脚本固定不动。它反复改配方、跑训练、读验证指标，保留更好的版本。</p>
+<p>结果不乐观。假设一组自动研究记录里，83 个实验（含基线）只保留了 15 个，其中 1 个是基线。去掉基线，剩下 14 个是被保留的非基线版本，占 83 个实验的 16.9%。</p>
+<p>它们比自己的父版本好，才被留下；是否超过最初的基线，要逐一比较。平均每 5.9 个实验才留下 1 个非基线版本。</p>
+<p>算一下成本。</p>
+<p>假设每个实验 1.5 个 GPU 小时，83 个实验共 124.5 个 GPU 小时。摊到 14 个保留步骤上，每个约 8.9 个 GPU 小时，可用于估算<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>。自动研究适合有明确数值指标的任务，指标靠主观评分时，改进方向会漂。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>ρ</mi><mo>=</mo><mfrac><mn>14</mn><mn>83</mn></mfrac><mo>≈</mo><mn>16.9</mn><mi mathvariant="normal">%</mi><mo separator="true">,</mo><mspace width="2em"/><msub><mi>C</mi><mtext>improvement</mtext></msub><mo>=</mo><mfrac><mrow><mn>83</mn><mo>×</mo><mn>1.5</mn></mrow><mn>14</mn></mfrac><mo>≈</mo><mn>8.9</mn><mtext> GPU 小时</mtext></mrow><annotation encoding="application/x-tex">\rho = \frac{14}{83} \approx 16.9\%, \qquad
+C_{\text{improvement}} = \frac{83 \times 1.5}{14} \approx 8.9\text{ GPU 小时}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">ρ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">83</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">14</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord">16.9%</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">improvement</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">14</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">83</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1.5</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord">8.9</span><span class="mord text"><span class="mord"> GPU </span><span class="mord cjk_fallback">小时</span></span></span></span></span></span></div>
+<p>ρ 是非基线保留版本占全部实验的比例；分子 14 是去掉基线后的保留数，分母 83 是实验总数。它描述的是「保留」这一步；「相对最初基线更好」要另算。若要判断它们是否超过最初基线，需要另做逐版本比较。</p>
+<p>失败的实验也要留档。那 68 个未保留的版本记下改了什么、为什么没保留，对下一轮选择方向的用处不比成功记录小。</p>
+<p>指标必须同口径。验证集上「每字节比特数」（bits per byte，BPB）按字节<abbr class="term" tabindex="0" title="归一化（Normalization）：按约定方式调整数值尺度的操作，例如 LayerNorm 对每个位置的特征做归一化。" data-tip="归一化（Normalization）：按约定方式调整数值尺度的操作，例如 LayerNorm 对每个位置的特征做归一化。">归一化<span class="term-en">（Normalization）</span></abbr>，本来就是为了让不同<abbr class="term" tabindex="0" title="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。" data-tip="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。">分词器<span class="term-en">（Tokenizer）</span></abbr>的模型可比；它要求同一份验证文本、同一套预处理，分词器可以不同。换了文本或预处理，数值就变了，历史分数不能再比。</p>
+<h3 id="候选越多选择越容易骗人">候选越多，选择越容易骗人</h3>
+<p>选择本身会产生提升。在一批候选里挑分数最高的，即使所有候选的真实能力相同，最高分也会高于平均值。</p>
+<p>看一次选择实验。20 个候选，在 50 道题的开发集上评估，最好的一个比基线高 6 个百分点。同一批候选换随机种子重跑，假设单次波动的幅度约正负 4 个百分点（50 道题，数字为假设）。6 个百分点虽然大于 4，但这是 20 个候选里挑出的最高分，选择本身会抬高最高分；50 道题也少。</p>
+<p>要判断这 6 个百分点里有多少是真提升，得重跑多个种子，在没参与挑选的独立验证集上复测，并和基线做同口径比较。</p>
+<p>候选越多，挑出来的最高分越虚，100 个候选能造出更大的假提升。更稳的做法是两道关都过才保留：开发集领先，验证集也领先。</p>
+<p>要压住噪声，多跑种子。假设每个候选每轮评估 30 美元，20 个候选跑 3 个种子就是 20×3×30 等于 1,800 美元。这个成本要提前算进自改进的预算，否则团队会用一次结果下结论。</p>
+<h3 id="从改配方到改研究员">从改配方到改研究员</h3>
+<p>递归自我改进（Recursive Self-Improvement，RSI）比自动研究更进一步。自动研究改的是训练配方，RSI 改的是研究方法本身，下一轮用改过的方法再去改。</p>
+<p>公开资料中的一类探索，在固定模型下搜索运行时配置，包括工具集、提示模板、循环终止条件和<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>拼装方式。模型参数保持不变，效果提升来自运行时的改进。按本章的分类，这属于自动研究。</p>
+<p>判断真假 RSI，看改进下一轮研究智能体的那个东西，本身有没有被这一轮改过。没有，就只是一次性优化。</p>
+<h3 id="失败案例学会讨好记分的人">失败案例：学会讨好记分的人</h3>
+<p>回到开头那个周末。系统改测试脚本，是因为测试脚本在它可写的目录里。把评估器挪到只读位置，同样的循环会转向改提示词和改代码。</p>
+<p>另一类失败更隐蔽，叫共同适应。评估器是一个模型，测试集是评估器生成的，系统反复针对这批题优化。分数一路上涨，换一批新题就掉回原样。解决办法是留一批只用于验收的题，调优过程不碰。</p>
+<p>第三种失败是改多处。一次同时改提示词和工具描述，分数涨了，团队不知道是哪一项的功劳，下一轮又想同时改两处。几轮之后，没有一处能单独复现，回退也找不到该退哪一处。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>自改进的成本被低估。每个候选版本都要完整评估一次，评估成本随候选数量线性增长，最后可能比人工改一版更贵，具体取决于评估任务。<abbr class="term" tabindex="0" title="端到端（End-to-End）：从用户输入一直测到最终结果，覆盖任务的完整过程。" data-tip="端到端（End-to-End）：从用户输入一直测到最终结果，覆盖任务的完整过程。">端到端<span class="term-en">（End-to-End）</span></abbr>任务本身跑一遍就贵，候选一多，评估账单会先压过改进收益。</p>
+<p>更危险的是共同适应。评估者、测试集和发布流程只要有一处在可编辑面里，系统就会学会讨好它。可编辑面要定期审计，别指望规则写在提示词里就能管住。</p>
+<p>样本小的时候，选择本身就会产生提升。多跑几个随机种子再看提升是否稳定，是最低要求。</p>
+<p>发布环节也要留在人手里。自改进可以提议上线，不能自己批准上线。</p>
+<p>能被自动改进的通常是可度量的部分。用户信任、可维护性、失败时是否给出可理解的说明和可恢复的路径，都不在分数里，也不在循环里。这些要靠人工评审补。</p>
+<h2 id="自测">自测</h2>
+<ol><li>自改进循环的四步分别是什么？为什么一次只能改一处？</li><li>按正文假设，83 个实验保留 15 个（含基线），非基线保留版本占全部实验的比例是多少？若每个实验 1.5 个 GPU 小时，摊到每个非基线保留版本约多少 GPU 小时？</li><li>20 个候选、50 道题，最好候选比基线高 6 个百分点。怎样验证它是否真的有效？</li><li>判断一次改进是不是真正的 RSI，要问哪个问题？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2303.11366" rel="noreferrer">通过文本反馈改进行动</a>。</li></ul>
+<ul><li><a href="https://arxiv.org/abs/2505.22954" rel="noreferrer">Darwin Gödel Machine：修改代码并经验验证</a>。</li></ul>
+<ul><li><a href="https://github.com/karpathy/autoresearch" rel="noreferrer">autoresearch：固定约束下的训练实验循环</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-tool-skill-e2e-eval.html"><small>上一章</small><span>工具、技能与端到端评估</span></a>
+  <a class="nav-next" href="ch-transformer-design.html"><small>下一章</small><span>Transformer 通识：从 token 到下一个词</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

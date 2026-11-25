@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>训练三阶段：预训练、SFT、偏好与 RL · Agent 概论</title>
+<meta name="description" content="预训练、微调与偏好优化各改什么。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#学会续写学会回答学会选择">学会续写、学会回答、学会选择</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="training-stages" data-part="p4">
+    <p class="crumb"><a href="index.html">目录</a> / 深入 / 第 20 章</p>
+    <div class="prose-body">
+<h1>训练三阶段：<br>预训练、SFT、偏好与 RL</h1>
+<p>给模型一句「把这封客服邮件转成工单」，它可能续写一段邮件，也可能给出格式正确的 JSON。同一个问题，模型表现差别很大，背后往往是<abbr class="term" tabindex="0" title="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。" data-tip="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。">训练<span class="term-en">（Training）</span></abbr>分了不同阶段。</p>
+<p>打个比方，这三段训练像培养一位新人。先广泛阅读打下语言底子，这是预训练；再照着范例学干活格式，这是<abbr class="term" tabindex="0" title="监督微调（Supervised Fine-Tuning）：用「请求—答案」成对的数据做监督微调，教模型按格式回答。" data-tip="监督微调（Supervised Fine-Tuning）：用「请求—答案」成对的数据做监督微调，教模型按格式回答。">监督微调<span class="term-en">（Supervised Fine-Tuning）</span></abbr>；最后根据好坏反馈调整取舍，这是偏好与强化学习。</p>
+<p><strong>正式定义</strong>：训练（Training）是用数据调整<abbr class="term" tabindex="0" title="模型参数（Model Parameters）：模型通过训练学到的数值，例如矩阵中的权重。参数量表示这些数值的数量。" data-tip="模型参数（Model Parameters）：模型通过训练学到的数值，例如矩阵中的权重。参数量表示这些数值的数量。">模型参数<span class="term-en">（Model Parameters）</span></abbr>的过程。常见主线分三段：预训练学文本规律，监督微讲学任务示范，偏好与强化学习按比较或评分调整输出。各段用的材料和学习信号不同，回答的问题也不同。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-20/panel-1.webp" alt="第 20 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：模型不是天生就会吗？</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-20/panel-2.webp" alt="第 20 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：预训练、SFT、偏好训练，一步一步来。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-20/panel-3.webp" alt="第 20 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：数据和算力，一样都不能少。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-20/panel-4.webp" alt="第 20 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：能力是练出来的。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>预训练学习文本规律。监督微调（Supervised <abbr class="term" tabindex="0" title="微调（Fine-Tuning）：在已经训练好的模型上继续训练，以适应任务或数据。可以更新全部参数，也可以只更新一部分参数。" data-tip="微调（Fine-Tuning）：在已经训练好的模型上继续训练，以适应任务或数据。可以更新全部参数，也可以只更新一部分参数。">微调<span class="term-en">（Fine-Tuning）</span></abbr>，SFT）学习示范。偏好与强化学习依据比较或评分调整输出。三段主线解决会不会、像不像、好不好三个问题，数据与学习信号各不相同。</p>
+<p>中间训练和推理训练是这条主线的扩展，用的仍是同一种模型结构。越往后数据越贵、量越小，效果越依赖<abbr class="term" tabindex="0" title="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。" data-tip="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。">评估<span class="term-en">（Evaluation）</span></abbr>。代价集中在预训练的算力，以及后两段的稳定性。</p>
+<h2 id="学会续写学会回答学会选择">学会续写、学会回答、学会选择</h2>
+<p>模型的能力会在不同训练环节中形成。预训练让模型通过大量文本中的预测任务学习规律。监督微调给出任务和示范回答，教它按预期方式响应。偏好或奖励反馈再调整它倾向于产生的输出。</p>
+<p>这个顺序是常见教学框架，实际训练配方可以交替、组合，也可以缺掉某一阶段。比较两种方法时，要问它改动的参数、使用的数据与反馈分别是什么。</p>
+<h3 id="同一个天气请求三种不同练习">同一个天气请求，三种不同练习</h3>
+<p>预训练时，模型可能看到“今天的天气是晴天”，练习预测后面的文字。它学到语言与知识中的规律；实时天气仍要靠外部接口。</p>
+<p>监督示范可以教它在用户询问天气时，生成城市与单位都正确的工具请求。外部程序仍然负责查询。只学会一个合法格式，还不够理解所有城市、日期与单位组合，所以要用变化后的任务检查。</p>
+<p>奖励反馈可以根据执行后的结果评分。比如请求能否被解析、单位是否符合要求、最终答案是否引用了真实返回。评分越贴近真正目标，反馈才越有用。错误奖励也会鼓励错误捷径。</p>
+<h3 id="读资料为什么不等于训练">读资料为什么不等于训练</h3>
+<p>把一份新政策放进输入，可以让固定参数的模型参考它回答。这改变的是本次材料。训练需要计算目标、误差与参数更新，之后的<abbr class="term" tabindex="0" title="训练权重（Weights）：模型训练后保存的参数数值。训练程序通过更新这些数值改变模型。" data-tip="训练权重（Weights）：模型训练后保存的参数数值。训练程序通过更新这些数值改变模型。">模型权重<span class="term-en">（Weights）</span></abbr>才会变化。两者都可能改善表现，但更新时间、成本与影响范围不同。</p>
+<p>小模读到新笔记后改了回答，依据来自这次输入。训练程序用一批样例更新模型参数，改变的则是参数。判断模型是否学会了新东西，要看去掉这份临时笔记后，变化是否仍然存在，并核对训练记录。</p>
+<p>某次回复更符合用户偏好，可能只是输入里多了偏好记录。判断是否训练过，要检查参数有没有更新，并核对训练记录。</p>
+<p>对照两列，先找变化发生在哪：左列更新输入材料，参数不动；右列通过训练更新参数。矩阵里的数只表示变化位置。</p>
+<figure class="teaching-figure"><img src="figures/teach-training-update.svg?v=2692d3240611" alt="图 20.1 · 读取与训练改变的位置不同" loading="lazy" decoding="async"><figcaption>图 20.1 · 读取与训练改变的位置不同</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>把新资料放进输入后，我就可以参考它。</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b><abbr class="term" tabindex="0" title="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。" data-tip="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。">训练<span class="term-en">（Training）</span></abbr>程序通过更新参数改变模型。新资料放进输入后，模型在这次调用中参考它。</p></aside>
+</div></figure>
+<h2 id="机制">机制</h2>
+<h3 id="先看预测词元的训练怎样进行">先看预测词元的训练怎样进行</h3>
+<p>先看预训练和监督微调中常见的<abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr>预测任务。假设“金”单独占一个词元，读到“香港是亚洲的”后，下一个目标词元可以是“金”。训练时为各位置准备后续词元这个目标，计算预测与目标的差距，再通过优化过程调整参数。这里介绍的是词元预测<abbr class="term" tabindex="0" title="训练损失（Loss）：训练时衡量预测与目标差距的数值。训练程序据此调整参数。" data-tip="训练损失（Loss）：训练时衡量预测与目标差距的数值。训练程序据此调整参数。">训练损失</abbr>（Loss）；后面的偏好与奖励优化使用不同的学习信号。</p>
+<p>训练时喂给模型的是真实的上一个 token；它自己刚生成的 token 不进入下一步。整段序列因此能并行算损失，代价是训练与推理的输入分布不完全一致。</p>
+<p>训练<abbr class="term" tabindex="0" title="显存（GPU Memory）：图形处理器上的存储空间，常用于模型权重、中间张量和缓存。实际占用还受上下文长度与并发等因素影响。" data-tip="显存（GPU Memory）：图形处理器上的存储空间，常用于模型权重、中间张量和缓存。实际占用还受上下文长度与并发等因素影响。">显存<span class="term-en">（GPU Memory）</span></abbr>要按状态算。每个参数要存权重、<abbr class="term" tabindex="0" title="梯度（Gradient）：描述参数变化会怎样影响损失的量。优化方法利用它选择参数的更新方向与步幅。" data-tip="梯度（Gradient）：描述参数变化会怎样影响损失的量。优化方法利用它选择参数的更新方向与步幅。">梯度<span class="term-en">（Gradient）</span></abbr>、FP32 主权重与两个优化器动量，合计约 16 字节。举例：7×10⁹ 个参数乘 16 字节，约 112×10⁹ 字节，也就是 112 GB，还没算激活与通信缓冲。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>M</mi><mtext>train</mtext></msub><mo>≈</mo><mn>16</mn><mi>N</mi><mtext> bytes</mtext></mrow><annotation encoding="application/x-tex">M_{\text{train}} \approx 16N \text{ bytes}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">train</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">16</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mord text"><span class="mord"> bytes</span></span></span></span></span></span></div>
+<p>N 是<abbr class="term" tabindex="0" title="参数量（Parameter Count）：模型中参数数值的数量，常用B表示十亿。" data-tip="参数量（Parameter Count）：模型中参数数值的数量，常用B表示十亿。">参数量<span class="term-en">（Parameter Count）</span></abbr>，16 是每个参数的状态字节数。N=7×10⁹ 时，M 约为 112 GB。</p>
+<p>图 20.2 画出本章的三段教学主线。每段使用的数据和目标有所不同：预训练主要消耗大规模计算，监督微调需要合适的示范，偏好或奖励优化还要付出采样与评估成本。具体配方可以交替、组合。</p>
+<figure><img src="figures/teach-training-stages.svg?v=47ebeee61777" alt="图 20.2 · 训练阶段具有不同学习信号" loading="lazy" decoding="async"><figcaption>图 20.2 · 训练阶段具有不同学习信号</figcaption></figure>
+<p>这套账只算模型状态。激活、通信与框架开销还要另加，实际占用会更高。</p>
+<h3 id="预训练只学分布">预训练只学分布</h3>
+<p>预训练的数据是配比出来的。网页提供广度，代码提供可执行模式，书籍提供长语篇，数学与教育文本提供解题过程。比例失衡，模型的能力分布就跟着偏。</p>
+<p>规模决定代价。Llama 3.1 用约 15 万亿 token 训练 8B 模型，消耗约 146 万 H100 卡时。按 6ND 粗估，N=8B、D=15T，稠密计算约 7.2×10²³ 次浮点运算。</p>
+<p>训练要盯两条曲线。训练与验证都下降是健康信号；验证损失在固定步数后回升，说明过拟合，应回滚到最佳<abbr class="term" tabindex="0" title="检查点（Checkpoint）：保存下来的运行状态，供中断后恢复。" data-tip="检查点（Checkpoint）：保存下来的运行状态，供中断后恢复。">检查点<span class="term-en">（Checkpoint）</span></abbr>再决定是否继续。</p>
+<p>失败案例：验证损失连续上升时继续加步数，模型在训练集上更熟，在留出集上更差。回滚、查学习率与数据重复，比继续训练有效。</p>
+<p>预训练的边界是钱与数据。多数团队不需要从头训练，只需要在已有基座上做后两段。</p>
+<h3 id="五种方法改的东西不同">五种方法改的东西不同</h3>
+<p>把训练方法排开看，每种方法改的是不同对象，供给的数据也不同。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">方法</th><th scope="col">改什么</th><th scope="col">供给什么数据</th></tr></thead><tbody><tr><td>上下文学习</td><td>本次请求的行为</td><td>指令与示例</td></tr><tr><td>预训练</td><td>广泛文本分布</td><td>大规模文本混合</td></tr><tr><td>中间训练</td><td>领域或长上下文能力</td><td>聚焦文本与保留混合</td></tr><tr><td>监督微调</td><td>期望回答的样式</td><td>请求与答案对</td></tr><tr><td>蒸馏</td><td>教师的行为</td><td>教师输出或分布</td></tr></tbody></table></div>
+<p>这张表覆盖「改参数」的四类方法：预训练、中间训练、SFT、蒸馏；<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>学习不动权重。它没有列偏好/RL 和推理训练，后者见后面的小节。区别还在学习信号和目标函数；模型结构通常不变。</p>
+<p>中间训练是预训练与微调之间的一层。它用更高质量的教育与解题文本、领域文档和长上下文数据继续训练，同时保留一部分通用数据做回放。回放的作用是防止能力回退，评估要留独立留出集。</p>
+<p>中间训练最容易出问题的地方是回退。目标领域变强，通用能力可能退步。没有保留混合与回退检查，收益会被抵消。</p>
+<p>长上下文也是一项中间训练目标。序列拉长，位置处理与<abbr class="term" tabindex="0" title="注意力（Attention）：给不同位置的信息计算权重并汇合的机制。权重分给输入位置；输出词元的概率由后面的输出层给出。" data-tip="注意力（Attention）：给不同位置的信息计算权重并汇合的机制。权重分给输入位置；输出词元的概率由后面的输出层给出。">注意力<span class="term-en">（Attention）</span></abbr>都要重新验证，短序列上的效果不能直接外推。</p>
+<h3 id="监督微调把能力变成行为">监督微调把能力变成行为</h3>
+<p>监督微调（Supervised Fine-Tuning，SFT）用请求与答案对继续训练。答案仍按 token 生成，只是数据从自然文本换成了示范。</p>
+<p>数据要覆盖五类：任务指令、多轮对话、代码与解题、偏好与安全行为、语言与格式。任务指令教摘要、分类与转换；多轮对话教用历史、守角色。</p>
+<p>代码与解题教可执行或已验证的答案。偏好与安全行为教语气、拒绝与不确定表达。语言与格式教目标用户与输出结构。</p>
+<p>数据来源可以分几类：人工撰写、教师模型生成、任务专家编写，以及人工与合成的混合；最后一种是把人工与合成配在一起的组织方式。教师生成的样本便宜，会带教师的错误与模板重复。</p>
+<p>失败案例：把损失算在提示位上。模型会去学「怎么复述问题」，推理时更容易跑偏（推断）。正确做法是只在回答 token 上累加损失，提示位掩码置零。</p>
+<p>数据切分要按会话或模板分组。同一订单的改写样本如果跨进验证集，指标会虚高。</p>
+<p>省钱的版本是<abbr class="term" tabindex="0" title="低秩适配（Low-Rank Adaptation）：冻结原模型，只训练两个小矩阵的微调方法，省显存。" data-tip="低秩适配（Low-Rank Adaptation）：冻结原模型，只训练两个小矩阵的微调方法，省显存。">低秩适配</abbr>（Low-Rank Adaptation，LoRA）。它冻结原权重，只训练两个小矩阵。宽度 4096、秩取 8 时，两个小矩阵各是 8×4096 与 4096×8，合计 65,536 个参数。原权重矩阵是 4096²=16,777,216 个参数，适配器占 0.39%。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>θ</mi><mtext>LoRA</mtext></msub><mi mathvariant="normal">∣</mi><mo>=</mo><mn>2</mn><mi>r</mi><mi>d</mi><mo separator="true">,</mo><mspace width="2em"/><mfrac><mrow><mn>2</mn><mi>r</mi><mi>d</mi></mrow><msup><mi>d</mi><mn>2</mn></msup></mfrac><mo>=</mo><mfrac><mrow><mn>2</mn><mi>r</mi></mrow><mi>d</mi></mfrac></mrow><annotation encoding="application/x-tex">|\theta_{\text{LoRA}}| = 2rd, \qquad \frac{2rd}{d^2} = \frac{2r}{d}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LoRA</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">d</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>r 是秩，d 是原矩阵宽度。代 r=8、d=4096，参数量是 65,536，占比 16/4096≈0.39%。</p>
+<p><abbr class="term" tabindex="0" title="量化（Quantization）：用更少的位数存权重，比如 16 位压到 4 位，省显存但可能掉精度。" data-tip="量化（Quantization）：用更少的位数存权重，比如 16 位压到 4 位，省显存但可能掉精度。">量化<span class="term-en">（Quantization）</span></abbr>低秩适配（Quantized Low-Rank Adaptation，QLoRA）把基座换成 4-bit。适配器仍按低秩方式训练；在 QLoRA 的特定配置下（4-bit 基座、低秩适配、梯度检查点等），单张 48GB 卡可以微调 65B 模型。</p>
+<p>微调的另一面是遗忘。以下是一组教学示意数字：任务准确率从 70% 升到 90%，合法 JSON 从 40% 升到 98%，通用问答却从 60% 跌到 52%。专精与回退要同时盯。</p>
+<h3 id="偏好学习把行为调成偏好">偏好学习把行为调成偏好</h3>
+<p>偏好学习用人类或模型的打分替代标准答案。三种做法的差别在反馈从哪来，以及更新时和谁比较。这里的策略指模型当前的行为分布。SFT 通常只给一个可接受答案；当多个答案都能接受、但好坏有差别时，才需要偏好学习来排序。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">方法</th><th scope="col">反馈来源</th><th scope="col">学习方式</th></tr></thead><tbody><tr><td>近端策略优化（Proximal Policy Optimization，PPO）</td><td>奖励模型给新回答打分</td><td>与旧策略比较，限制单次更新幅度</td></tr><tr><td>直接偏好优化（Direct Preference Optimization，DPO）</td><td>存好的坏回答对</td><td>从对比中直接学习</td></tr><tr><td>组相对策略优化（GRPO）</td><td>同一问题多个回答各自打分</td><td>组内相对比较后更新</td></tr></tbody></table></div>
+<p>规模感来自一份公开配方。监督微调、奖励建模与策略更新大致都在万级到数万级样本（Ouyang 等，2022；具体数字随版本与统计口径变化）。数据形态从示范换成了对比与自采样记录。</p>
+<p>直接偏好优化用已有的成对比较构造损失，省掉在线采样与奖励模型训练。评论网络（critic）估计价值，帮助计算策略的更新方向；近端策略优化需要评论网络，直接偏好优化不用。</p>
+<p>失败模式有两种。奖励黑客是策略学会刷分，例如变啰嗦或迎合用户。分布漂移（模型产出的回答跑到奖励模型没见过的区域）是策略产出的回答超出奖励模型的可靠范围。要同时监控留出偏好、事实性、安全性与 KL 散度。KL 散度衡量新旧策略的偏离程度。</p>
+<p>还有一条不依赖人类偏好的路线：用可验证的奖励替代打分，例如数学答案对错、代码单测是否通过。组相对策略优化（Group Relative Policy Optimization，GRPO）是其中常用的一种。</p>
+<p>GRPO 的做法是同一问题采样一组回答，按组内结果算相对优势。举例：正确答案是 19，采样 4 个回答，解析值分别是 29、19、19、15。奖励是 0、1、1、0，减去组均值 0.5 再除以标准差 0.5，优势是 -1、+1、+1、-1。</p>
+<p>验证器（按规则自动判分的程序）也有盲区。精确匹配怕解析错误与等价形式；代码单测怕用例覆盖不全；格式检查会让格式对、内容错的答案过关；步骤反馈标注贵且不可靠。</p>
+<h3 id="推理训练把计算花在思考上">推理训练把计算花在思考上</h3>
+<p>推理训练可以分三件事看：让模型写步骤、用可验证奖励训练、把<abbr class="term" tabindex="0" title="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。" data-tip="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。">大模型<span class="term-en">（Large Language Model）</span></abbr>的行为压缩到小模型。它们经常一起出现，各自解决不同的问题。这里的推理指 reasoning（推导过程）；第 21 章的 <abbr class="term" tabindex="0" title="推理（Inference）：使用已有模型处理输入、计算输出的过程。常规推理使用固定的模型参数。" data-tip="推理（Inference）：使用已有模型处理输入、计算输出的过程。常规推理使用固定的模型参数。">推理<span class="term-en">（Inference）</span></abbr> 指用模型计算输出。</p>
+<p>思维链（Chain of Thought，CoT）让模型先写中间步骤再给结论。每个新步骤都成为下一段输入，上下文会随步骤变长，推理成本也跟着上去。</p>
+<p>举例：比较 0.11 与 0.9。先把精度对齐成 11/100 与 90/100，再比较 90 大于 11，得到 0.9 更大。差是 0.79，最后验证 0.11+0.79=0.90。</p>
+<p>多步推理还会增加 token 成本：步骤越长，账单越高。下面只算生成的 token，不算训练时的前向与反向计算。</p>
+<p>推理训练的 token 账很直观。1 万条请求下，监督微调按每条 1024 个目标 token 算约 1024 万 token；强化学习每条采 8 个回答，约 8192 万 token，是前者的 8 倍。</p>
+<p>DeepSeek-R1 的配方把几段串起来：冷启动微调、推理强化学习、再一轮微调、跨任务强化学习。几段训练可以反复迭代，不必一次走完。</p>
+<p>同一问题采样多个完整解再取多数投票，是另一条提升路径。代价是成倍的推理算力。</p>
+<p>蒸馏是另一条压缩路线。小模型学大模型的输出分布，<abbr class="term" tabindex="0" title="温度（Temperature）：调整采样分布尖锐程度的参数。较低时更集中于高分候选，较高时分布更平缓。" data-tip="温度（Temperature）：调整采样分布尖锐程度的参数。较低时更集中于高分候选，较高时分布更平缓。">温度<span class="term-en">（Temperature）</span></abbr>控制分布的平陡。高温让分布更平，传递类别之间的关系；正确答案只是其中一部分。</p>
+<p>推理训练的收益受题型限制。题目超出验证器覆盖范围，训练收益会迅速衰减。通用可靠性不随单个题型的准确率自动上涨。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>预训练的成本把多数团队挡在门外。8B 模型就要 146 万卡时，按每卡时 2 美元粗算，一次预训练约 292 万美元。</p>
+<p>偏好学习有刷分风险。奖励模型被策略摸透之后，分数会继续上涨，质量未必跟着涨。</p>
+<p>监督微调会遗忘。任务指标上升时，要同时盯通用能力与安全行为。</p>
+<p>评估不能只看损失：任务准确率与训练损失（Loss）是两条曲线，要一起看。评估本身的成本也在涨；每题都要跑完整流程，样本一多，评估账单可能接近甚至超过微调成本，具体要看任务长度和调用价格。数据污染是隐性成本：验证集里的样本如果与训练样本同源，指标会好看但没有意义。</p>
+<h2 id="自测">自测</h2>
+<ol><li>三段训练各自的学习信号是什么？</li><li>SFT 之后为什么还要偏好学习？</li><li>奖励黑客与验证器盲区分别指什么？</li><li>LoRA 宽度 4096、秩 8 时，适配器参数是多少，占原权重矩阵的百分之几？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2305.18290" rel="noreferrer">直接偏好优化原论文</a>。</li><li><a href="https://arxiv.org/abs/2106.09685" rel="noreferrer">低秩适配原论文</a>。</li></ul>
+<ul><li><a href="https://arxiv.org/abs/2203.02155" rel="noreferrer">InstructGPT：示范与人类反馈训练</a>。</li></ul>
+<ul><li><a href="https://arxiv.org/abs/2501.12948" rel="noreferrer">DeepSeek-R1：推理能力与强化学习</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-transformer-design.html"><small>上一章</small><span>Transformer 通识：从 token 到下一个词</span></a>
+  <a class="nav-next" href="ch-inference-economics.html"><small>下一章</small><span>推理为什么贵：量化、缓存与注意力</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

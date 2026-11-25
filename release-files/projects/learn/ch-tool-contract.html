@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工具：契约、约束解码与 MCP · Agent 概论</title>
+<meta name="description" content="双方同意的接口到底长什么样。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#一张表单怎样变成工具调用">一张表单怎样变成工具调用</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="tool-contract" data-part="p1">
+    <p class="crumb"><a href="index.html">目录</a> / 行动 / 第 6 章</p>
+    <div class="prose-body">
+<h1>工具：<br>契约、约束解码与 MCP</h1>
+<p>假设一次查订单的调用失败了三次。模型每次都把参数写成 <code>order_id: 1002</code>，主机的校验每次都说「参数无效」。模型不知道错在哪，只能换个写法再试，第三次把订单号填成了 <code>ORD-1002A</code>。参数格式、说明文字、错误返回，三者一起决定一次调用能不能成。</p>
+<p>打个比方，<abbr class="term" tabindex="0" title="工具契约（Tool Contract）：工具的名字、参数、返回值和错误格式的约定，模型和代码都按它对接。" data-tip="工具契约（Tool Contract）：工具的名字、参数、返回值和错误格式的约定，模型和代码都按它对接。">工具契约<span class="term-en">（Tool Contract）</span></abbr>像一张填好的订餐单：写清店名、要哪几栏、每栏填什么、成功和退单分别怎么回执。模型和程序都照这张单子对接，谁也不用猜对方的规矩。</p>
+<p><strong>正式定义</strong>：工具契约（Tool Contract）是工具名称、参数、返回值和错误格式的约定。模型按它生成请求，程序按它检查和执行；双方都认这份约定，调用才能稳定跑通。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-06/panel-1.webp" alt="第 6 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：这个工具大概能查订单。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-06/panel-2.webp" alt="第 6 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：参数不合法，接口只好退回来了。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-06/panel-3.webp" alt="第 6 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：按 schema 填好，再过四道检查就行。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-06/panel-4.webp" alt="第 6 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：插头对上了，才算接通。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>一个工具的最小契约由名称、输入 <abbr class="term" tabindex="0" title="模式定义（Schema）：约定数据里有哪些字段、字段类型和约束的结构说明。格式满足约定后，还要检查任务条件与权限。" data-tip="模式定义（Schema）：约定数据里有哪些字段、字段类型和约束的结构说明。格式满足约定后，还要检查任务条件与权限。">模式定义<span class="term-en">（Schema）</span></abbr>（一份参数说明）和执行结果三部分组成；描述和错误格式也要写进契约。模型能看到名字、描述和参数 schema，返回格式通过工具结果体现。校验和执行都在主机侧完成。这里的主机（Host）指承载<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>的应用。</p>
+<p>运行时至少要过四道检查：JSON 语法、schema 与类型、是否允许、权限与前置条件。<abbr class="term" tabindex="0" title="约束解码（Constrained Decoding）：在生成时限制可选 token，让输出直接符合 JSON 等格式。" data-tip="约束解码（Constrained Decoding）：在生成时限制可选 token，让输出直接符合 JSON 等格式。">约束解码</abbr>（Constrained Decoding）把非法 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr> 在生成时就屏蔽掉；语法通过之后，请求是否合理还要主机检查。<abbr class="term" tabindex="0" title="模型上下文协议（Model Context Protocol）：一个让模型和外部工具按统一格式对接的协议。" data-tip="模型上下文协议（Model Context Protocol）：一个让模型和外部工具按统一格式对接的协议。">模型上下文协议<span class="term-en">（Model Context Protocol）</span></abbr>标准化发现和调用；权限仍留在主机。</p>
+<h2 id="一张表单怎样变成工具调用">一张表单怎样变成工具调用</h2>
+<p>订餐表单会把地址、份数和备注分开填写。工具契约也在做类似的事：明确工具叫什么，需要哪些字段，字段能填什么，成功与失败分别返回什么。</p>
+<p>小模生成调用请求，小运（运行时程序）检查后执行。<code>reserve_room</code> 只是请求里的工具名称，背后还要有实现预约的代码、可用的连接和执行权限。</p>
+<figure class="teaching-figure"><img src="figures/lesson-tool-checks.svg?v=189dbb90984b" alt="图 6.1 · 格式通过，日期不符：先修正请求，再继续检查。" loading="lazy" decoding="async"><figcaption>图 6.1 · 格式通过，日期不符：先修正请求，再继续检查。</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>格式通过了，为什么还停在第二行？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>字段齐全只能通过格式检查。请求日期与用户要求不符，要先修正；权限仍需单独检查。</p></aside>
+</div></figure>
+<p>从上往下看：日期字段齐全，格式检查通过；用户要求周五，请求却填成周四，任务条件检查失败。应先修正日期，再检查权限。此时还没有提交预约。</p>
+<p>图 6.1 画的是业务侧的三步；主机侧完整的四道检查在图 6.3 里。</p>
+<h3 id="格式正确仍然可能办错事">格式正确，仍然可能办错事</h3>
+<p>假设工具需要日期、起始时间和时长。日期必须符合格式，是第一层检查；结束时间不能早于开始时间，是业务检查；当前用户能否预约这间房，是权限检查。三者都要由程序落实。</p>
+<p>模型可能把“下周五”转换成一个合法但错误的日期。字段类型检查无法发现这种错误，还要把解析结果与用户请求核对。写操作尤其需要在提交前展示关键参数，让用户能够发现偏差。</p>
+<p>遇到“权限不足”，下一步可能要询问授权；遇到“服务超时”，则要核对结果并判断能否重试。若接口只返回“失败”，这两种情况就混在了一起。契约应写清错误类型、请求编号和是否允许重试。</p>
+<p>模型上下文协议解决工具如何被发现与调用的连接问题。工具是否安全、权限够不够，仍由应用自己的检查负责；接上统一接口之后，业务责任仍属于提供服务的系统。</p>
+<p>返回合法的结构化数据，只说明格式通过。预约是否正确，还要检查日期、对象、权限和实际写入结果。</p>
+<h2 id="机制">机制</h2>
+<h3 id="契约有三块">契约有三块</h3>
+<p>工具契约的最小形态，是名称、输入 schema（描述参数类型、必填项与格式的结构化说明）和执行结果。这是最小三块；完整的契约还要有描述和错误格式。订单助手的 <code>lookup_order</code> 收一个 <code>order_id</code>，返回订单状态或 not_found。</p>
+<p>模型能看到名字、描述和参数 schema；执行结果和错误码通过工具返回体现。它不知道数据库在哪，也没有权限。</p>
+<pre><code class="language-json">{&quot;name&quot;: &quot;lookup_order&quot;,
+ &quot;parameters&quot;: {&quot;type&quot;: &quot;object&quot;,
+   &quot;properties&quot;: {&quot;order_id&quot;: {&quot;type&quot;: &quot;string&quot;,
+     &quot;pattern&quot;: &quot;^ORD-[0-9]{4}$&quot;}},
+   &quot;required&quot;: [&quot;order_id&quot;],
+   &quot;additionalProperties&quot;: false}}</code></pre>
+<p>schema 里的 pattern 是有意义的。它把可接受的输入收窄成 ORD 加四位数字，<code>ORD-1002</code> 合法，<code>1002</code> 和 <code>ORD-1002A</code> 都不合法。补零写法 <code>ORD-0000</code> 到 <code>ORD-9999</code> 一共一万个字符串能通过这一条，大小写不在允许范围内，<code>ord-1002</code> 也过不去。</p>
+<p>契约同时约束两端：模型照着它写调用，主机照着它做校验。左边是可执行的函数，右边是模型看得见的说明。两边写的是同一件事，对不上的部分就是事故来源。</p>
+<p>描述文字也属于契约。同一句「查询订单」写得含糊，模型可能把订单号和快递单号混用。工具描述里写清「按订单号查，订单号形如 ORD-1002」，这句话本身就是一次校验，能省掉一批参数错误。</p>
+<p>执行结果也是契约的一部分。返回 <code>{&quot;order_id&quot;: &quot;ORD-1002&quot;, &quot;status&quot;: &quot;shipped&quot;}</code>，模型能按字段取值；返回一句「处理中，已经六天了」，模型只能把整句抄进回答，下一轮想引用状态值就没东西可引。约定错误也要结构化，<code>not_found</code>、<code>forbidden</code>、<code>timeout</code> 分别对应重试、交人、等一会儿，混成一个 <code>error</code> 字段，模型只能猜。</p>
+<figure><img src="figures/teach-tool-schema.svg?v=6ead5cd89bb8" alt="图 6.2 · 参数格式与实际资格分开检查" loading="lazy" decoding="async"><figcaption>图 6.2 · 参数格式与实际资格分开检查</figcaption></figure>
+<p>图 6.2 先看参数格式：ORD-1002 符合约定，1002 不符合。格式通过之后，主机仍须查询订单是否存在，并核验当前用户能否读取；这些业务事实无法单靠 schema 判断。</p>
+<h3 id="调用是模型写的执行是主机做的">调用是模型写的，执行是主机做的</h3>
+<p>模型输出的调用表示可以是文本，也可以是结构化 JSON。以朴素 JSON 协议为例，模型返回一个带 <code>kind</code> 和 <code>name</code> 的对象，终态是 <code>final</code> 或 <code>ask_user</code>。主机收到后要过四道检查。这四道依次是 JSON 语法、schema 与类型、动作是否被允许、权限与前置条件。</p>
+<p>四道检查各拦一类错法。括号少一个，第一道拦。<code>order_id</code> 写成数字 1002，第二道拦。本次运行只读，模型却要调退款，第三道拦。订单属于别人，第四道拦。</p>
+<p>四道检查写在主机代码里。提示词里写一句「只允许查询」，模型可能照做，也可能不照做；真正的限制在主机代码。</p>
+<p>四道全过才进入<abbr class="term" tabindex="0" title="分发（Dispatch）：校验通过后，按照预先约定的名称映射找到并调用相应工具函数。" data-tip="分发（Dispatch）：校验通过后，按照预先约定的名称映射找到并调用相应工具函数。">分发<span class="term-en">（Dispatch）</span></abbr>器。分发器按显式映射找到对应函数执行，不按模型给的名字直接调用。执行结果按角色为 tool 的消息追加回对话，再触发一次模型调用。模型提出动作，主机校验并执行，结果作为观察写回，下一轮输入随之更新；这四件事构成下一次决策的输入。</p>
+<p>量一下这四道的效果（数字为假设）。这里假设四类错误互不重叠，且每次调用最多犯一类。一天 10,000 次调用，格式错误 300 次，类型错误 200 次，越权动作 50 次，权限不足 20 次。真正执行的是 10,000 − 300 − 200 − 50 − 20 = 9,430 次。被拦下的 570 次里，越权的 50 次和权限不足的 20 次，若没有检查就可能变成真实写入。</p>
+<p>失败案例出在错误信息上。四道检查只返回「失败」两个字，模型没有线索，就在同一个参数上重复两三次；如果返回「<code>order_id</code> 必须是 ORD 加四位数字，你给的是 1002」，模型下一次基本能改对。校验的价值一半在拦截，一半在把错误说清楚。</p>
+<figure><img src="figures/11-tool-chain.svg?v=1c45b5deeae4" alt="图 6.3 · 从工具定义到执行回灌的五段链路" loading="lazy" decoding="async"><figcaption>图 6.3 · 从工具定义到执行回灌的五段链路</figcaption></figure>
+<p>如图 6.3 所示，五段里主机侧占了两道闸：校验与分发，任何一道不过都不该执行。</p>
+<h3 id="约束解码">约束解码</h3>
+<p>格式也可以在生成阶段就保证。常见做法分三层。生成前用提示词声明只返回一个 JSON 对象，生成中按语法屏蔽非法续写。生成后由运行时解析和校验。</p>
+<p>屏蔽的做法是给候选 token 打分。假设当前已经写到 <code>order_id</code> 的值的数字部分，后面只能是数字。为简化，把候选收窄到四个：1002 和 10 合法，<code>oops</code> 和右引号非法、概率记为零；合法的两个 logit 设为 3 和 2。</p>
+<p>这里把 1002 当成一个整体候选，是为了简化；真实<abbr class="term" tabindex="0" title="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。" data-tip="分词器（Tokenizer）：把文本切成词元并转换为编号的组件。不同分词器可能给同一句话不同的切分结果。">分词器<span class="term-en">（Tokenizer）</span></abbr>可能把它拆成多个 token。<abbr class="term" tabindex="0" title="logits（Logits）：模型给各候选词元的原始分数，经 softmax 转换为概率后可用于采样。" data-tip="logits（Logits）：模型给各候选词元的原始分数，经 softmax 转换为概率后可用于采样。">logits</abbr> 就是第 3 章那个还没过 <abbr class="term" tabindex="0" title="softmax（Softmax）：把一组分数变成总和为1的非负权重的运算。这里用于注意力权重和候选词元概率。" data-tip="softmax（Softmax）：把一组分数变成总和为1的非负权重的运算。这里用于注意力权重和候选词元概率。">softmax</abbr> 的原始分数。</p>
+<p>取指数得 20.09 与 7.39，总和 27.47，两项分到 0.731 和 0.269。</p>
+<p>这个算例的意义在候选空间。词表五万，屏蔽前每个位置都有五万个候选；进入数字位后，如果分词器把每个数字当独立 token，合法候选只剩十个数字，概率全部压在这十个上；真实分词器也可能把多位数字合成一个 token，合法候选会更多。约束越强，模型越不容易跑偏。</p>
+<p>约束的层级从语法到取值依次收紧。最外层是完整 JSON，往内依次是工具与参数形状、参数类型、枚举取值、正则模式。SGLang 的跳步优化在论文的测试设置下报告过 JSON <abbr class="term" tabindex="0" title="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。" data-tip="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。">解码<span class="term-en">（Decoding）</span></abbr>吞吐提升；具体倍数随语法与负载变化。</p>
+<p>它的边界有两处。语法层只能挡住形状，<code>ORD-9999</code> 格式完全合法，至于这个订单存不存在、属不属于当前用户，要在主机侧查。把 pattern 收得过窄也会挡人：新订单号改成 <code>ORD-1002A</code> 之后，旧正则会把全部合法请求拒掉。生成后才发现的格式错误还要整轮重来，多付一次输入与输出。</p>
+<h3 id="部署方式与模型上下文协议">部署方式与模型上下文协议</h3>
+<p>工具的实现可以放在三个地方。第一种是本地函数，简单好调试，但和进程耦合，慢调用会拖住整个助手。假设下游一次调用要 8 秒，并发只有 1；在这 8 秒里又来了 9 个请求，它们只能排队。如果这些请求等不到结果就结束，前面已经付过的输入 token 不会退。</p>
+<p>第二种是远端服务，通过超文本传输协议（HyperText Transfer Protocol，HTTP）暴露。远端服务把数据和规则留在服务端，代价是要维护认证、作用域和版本。它还要处理重试：一次失败重试两次，下游压力按三倍算。</p>
+<p>第三种是模型上下文协议（Model Context Protocol，MCP）。它把工具发现和调用做成统一接口。名字里的“<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>”指模型与工具之间的交互上下文；第 4 章的<abbr class="term" tabindex="0" title="上下文窗口（Context Window）：一次调用可使用的序列长度上限，通常以词元计。输入与生成输出是否共用限额，要按模型和服务约定核对。" data-tip="上下文窗口（Context Window）：一次调用可使用的序列长度上限，通常以词元计。输入与生成输出是否共用限额，要按模型和服务约定核对。">上下文窗口<span class="term-en">（Context Window）</span></abbr>是另一回事。</p>
+<p>价值可以用适配次数算：假设 3 个工具要接进 5 个助手。各自定制要写 3 × 5 = 15 份适配；统一协议之后，工具侧写 3 份服务端，助手侧写 5 份客户端，合计 8 份。</p>
+<p>MCP 这一层只规定交换格式。服务端暴露 <code>tools/list</code> 和 <code>tools/call</code> 两个接口，客户端把结果交回主机。权限策略仍然由主机决定：能不能调、能调哪个用户的订单，都由主机检查。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>契约给得越细，模型的自由度越低。正则写得太窄会把合法输入挡在外面，写得太宽等于没写。版本不同步也会让调用失败。例如工具新增了必填字段，主机已经更新，客户端缓存的参数说明却没刷新。模型仍按旧 schema 填参数，每次都会漏掉新字段。</p>
+<p>约束解码需要维护语法状态机。实际耗时取决于语法复杂度、解码实现和硬件，可以用同一批任务比较。</p>
+<p>更危险的是把格式正确当成语义正确。schema 保证字段齐全、类型对、模式匹配；订单是否存在、属于谁、当前用户有没有权限，都要主机另查。</p>
+<p>还有一类成本在排障上。一次被四道检查拦下的调用，日志里要能看出拦在哪一道、参数长什么样。缺了这段记录，团队只能看到「调用失败」四个字。</p>
+<p>下一章把一次<abbr class="term" tabindex="0" title="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。" data-tip="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。">工具调用<span class="term-en">（Tool Call）</span></abbr>放进循环，看失败、重试和停止怎样接在四道检查后面。</p>
+<h2 id="自测">自测</h2>
+<ol><li>一个工具契约包含哪三部分，模型能看到其中哪些？</li><li>四道检查分别拦住了什么错误？</li><li>为什么说语法校验通过不等于工具调用正确？</li><li>用正文假设重算：3 个工具接进 5 个助手，定制适配要写多少份？走统一协议之后合计多少份？省下多少？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2302.04761" rel="noreferrer">工具调用学习原论文</a>。</li><li><a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools" rel="noreferrer">模型上下文协议：工具规范（2025-06-18）</a>。</li></ul>
+<ul><li><a href="https://json-schema.org/draft/2020-12" rel="noreferrer">JSON Schema 2020-12：参数结构与验证</a>。</li></ul>
+<ul><li><a href="https://arxiv.org/abs/2312.07104" rel="noreferrer">SGLang：结构化生成与执行优化</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-context-engineering.html"><small>上一章</small><span>上下文工程：压缩、刷新与前缀缓存</span></a>
+  <a class="nav-next" href="ch-tool-loop.html"><small>下一章</small><span>工具调用循环与失败恢复</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

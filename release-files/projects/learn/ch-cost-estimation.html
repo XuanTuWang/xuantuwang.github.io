@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成本估算：FLOPs、显存与容量规划 · Agent 概论</title>
+<meta name="description" content="不用跑模型，手算一次任务要花多少算力、显存和钱。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#先把单位写清楚再谈模型贵不贵">先把单位写清楚，再谈模型贵不贵</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="cost-estimation" data-part="p4">
+    <p class="crumb"><a href="index.html">目录</a> / 深入 / 第 22 章</p>
+    <div class="prose-body">
+<h1>成本估算：<br>FLOPs、显存与容量规划</h1>
+<p>上线前最常被问到的问题是：这套配置装得下吗，一次任务要花多少钱。回答不必先跑模型。</p>
+<p>打个比方，算成本像给一次出行做<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>。先估要带多少行李，这是<abbr class="term" tabindex="0" title="显存（GPU Memory）：图形处理器上的存储空间，常用于模型权重、中间张量和缓存。实际占用还受上下文长度与并发等因素影响。" data-tip="显存（GPU Memory）：图形处理器上的存储空间，常用于模型权重、中间张量和缓存。实际占用还受上下文长度与并发等因素影响。">显存<span class="term-en">（GPU Memory）</span></abbr>；再估路上跑多少趟，这是计算量；最后乘上油费和租车价，这是单价。</p>
+<p><strong>正式定义</strong>：<abbr class="term" tabindex="0" title="浮点运算次数（Floating Point Operations）：完成一次计算所需的浮点运算次数，表示计算量。每秒能完成多少次则是FLOP/s，表示计算速率，两者需要分开记。" data-tip="浮点运算次数（Floating Point Operations）：完成一次计算所需的浮点运算次数，表示计算量。每秒能完成多少次则是FLOP/s，表示计算速率，两者需要分开记。">浮点运算次数</abbr>（Floating Point Operations，FLOPs）衡量一次计算要做多少次乘加；显存占用看权重、缓存和临时结果加起来放不放得下。两者再结合单价与 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr> 用量，才能估出账单。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-22/panel-1.webp" alt="第 22 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：显存大就够了吧？</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-22/panel-2.webp" alt="第 22 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：还要算并发、权重、缓存和预留，别只看显存。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-22/panel-3.webp" alt="第 22 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：逐项相减，才是能用的容量规划。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-22/panel-4.webp" alt="第 22 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：参数表和预算表对上了。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>浮点运算次数（Floating Point Operations，FLOPs）可用2mkn估算。权重占用按<abbr class="term" tabindex="0" title="参数量（Parameter Count）：模型中参数数值的数量，常用B表示十亿。" data-tip="参数量（Parameter Count）：模型中参数数值的数量，常用B表示十亿。">参数量<span class="term-en">（Parameter Count）</span></abbr>乘字节数计算，<abbr class="term" tabindex="0" title="键值缓存（Key-Value Cache）：缓存已经算过的键和值，生成下一个 token 时不用把整段前缀重算一遍。" data-tip="键值缓存（Key-Value Cache）：缓存已经算过的键和值，生成下一个 token 时不用把整段前缀重算一遍。">键值缓存<span class="term-en">（Key-Value Cache）</span></abbr>另算。估算的顺序是先算量级，再算瓶颈，最后换成钱；FLOPs 只是算术量，推理时间还要和搬运时间比较。</p>
+<p>把单次成本乘上调用次数，才是任务成本。手算只给量级，不给精确延迟。</p>
+<h2 id="先把单位写清楚再谈模型贵不贵">先把单位写清楚，再谈模型贵不贵</h2>
+<p>看到“七十亿参数”，可以先问存这些数需要多少字节。假设每个参数使用两字节，仅权重就约为一百四十亿字节，按十进制约 14 GB。这是教学估算，还没有算缓存、临时张量与<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时<span class="term-en">（Runtime）</span></abbr>开销。</p>
+<p>参数量数的是可学习数值有多少；运算量数的是一次任务需要做多少计算；显存容量限制的是运行时能同时放下多少数据。估算时要分别记账。</p>
+<h3 id="一次请求的价格与整项任务的价格">一次请求的价格与整项任务的价格</h3>
+<p>假设每次请求输入 2000 个 token，输出 500 个，任务要调用四轮。若每轮长度都相同，输入总数是 8000，输出总数是 2000。实际对话历史会增长，所以这只是便于核算的固定长度示例。</p>
+<p>再假设输入每百万 token 收 2 元，输出收 8 元。上述任务的模型费用为 0.016 元加 0.016 元，共 0.032 元。工具费用、失败重试、存储和人工检查还没有计入。这些价格只用于算例，不对应某个现行服务。</p>
+<p>如果一半任务失败，失败尝试花掉的钱仍在账单里。<abbr class="term" tabindex="0" title="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。" data-tip="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。">评估<span class="term-en">（Evaluation）</span></abbr>方案时，可以同时算每次尝试花多少、每个成功结果分摊多少，避免漏掉这部分费用。</p>
+<p>硬件估算也要留余量。装下权重只是第一步；目标<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>和并发人数还要另算缓存。先测单请求峰值，再逐步增加负载，比仅按模型文件大小采购更可靠。</p>
+<p>每轮便宜，长任务未必便宜：轮数、历史增长、重试和外部工具都会累加成本。</p>
+<h2 id="机制">机制</h2>
+<h3 id="一条乘法规则能排出成本顺序">一条乘法规则能排出成本顺序</h3>
+<p>浮点运算次数（Floating Point Operations，FLOPs）是这里的通用货币。矩阵 [m,k] 乘 [k,n] 产生 m×n 个输出，每个输出是长度 k 的点积。一次乘加算 2 次运算，主导成本约 2mkn。展开看就是 m×n 个输出，每个输出做 k 次乘加。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>C</mi><mtext>matmul</mtext></msub><mo>≈</mo><mn>2</mn><mi>m</mi><mi>k</mi><mi>n</mi><mo separator="true">,</mo><mspace width="2em"/><msub><mi>C</mi><mtext>proj</mtext></msub><mo>≈</mo><mn>8</mn><mi>B</mi><mi>T</mi><msup><mi>d</mi><mn>2</mn></msup><mo separator="true">,</mo><mspace width="2em"/><msub><mi>C</mi><mtext>attn</mtext></msub><mo>≈</mo><mn>4</mn><mi>B</mi><msup><mi>T</mi><mn>2</mn></msup><mi>d</mi></mrow><annotation encoding="application/x-tex">C_{\text{matmul}} \approx 2mkn, \qquad
+C_{\text{proj}} \approx 8BTd^2, \qquad
+C_{\text{attn}} \approx 4BT^2d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">matmul</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0315em;">mk</span><span class="mord mathnormal">n</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">proj</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:1.0585em;vertical-align:-0.1944em;"></span><span class="mord">8</span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">attn</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8641em;"></span><span class="mord">4</span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord mathnormal">d</span></span></span></span></span></div>
+<p>m、k、n 是矩阵维度，B 是批大小，T 是序列长度，d 是宽度。投影一项把 QKV 的 6BTd² 与输出投影的 2BTd² 合在一起。</p>
+<p>举例：三个 QKV 投影，每个是 [B,T,d] 乘 [d,d]。一个投影 2BTd²，三个合计 6BTd²。代入 B=1、T=16、d=128，得到 6×1×16×128²≈1.573×10⁶，即 1.573 MFLOPs。</p>
+<p><abbr class="term" tabindex="0" title="注意力（Attention）：给不同位置的信息计算权重并汇合的机制。权重分给输入位置；输出词元的概率由后面的输出层给出。" data-tip="注意力（Attention）：给不同位置的信息计算权重并汇合的机制。权重分给输入位置；输出词元的概率由后面的输出层给出。">注意力<span class="term-en">（Attention）</span></abbr>矩阵另算。查询与键相乘、概率与值相乘，各约 2BT²d，合计 4BT²d。B=1、T=16、d=128 时约 0.131 MFLOPs。</p>
+<p>如图 22.1 所示，规则只有一步：先数输出个数，再算每个输出的点积长度。</p>
+<figure class="teaching-figure"><img src="figures/teach-matrix-cost.svg?v=79b3f0f19528" alt="图 22.1 · 矩阵乘法的浮点运算量" loading="lazy" decoding="async"><figcaption>图 22.1 · 矩阵乘法的浮点运算量</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>输出有m×n格，每格约做2k次浮点运算。</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>合起来约是2mkn <abbr class="term" tabindex="0" title="浮点运算次数（Floating Point Operations）：完成一次计算所需的浮点运算次数，表示计算量。每秒能完成多少次则是FLOP/s，表示计算速率，两者需要分开记。" data-tip="浮点运算次数（Floating Point Operations）：完成一次计算所需的浮点运算次数，表示计算量。每秒能完成多少次则是FLOP/s，表示计算速率，两者需要分开记。">浮点运算次数<span class="term-en">（Floating Point Operations）</span></abbr>。它表示计算量；换成时间时，还要看<abbr class="term" tabindex="0" title="带宽（Bandwidth）：单位时间能搬运多少数据，解码阶段常被它卡住。" data-tip="带宽（Bandwidth）：单位时间能搬运多少数据，解码阶段常被它卡住。">带宽<span class="term-en">（Bandwidth）</span></abbr>和硬件实际利用率。</p></aside>
+</div></figure>
+<p>形状追踪是配套的检查方法。把每一步的张量形状写在纸上，哪一步对不上，错误就定位在那一层。</p>
+<p>把规则用在整层上，参数矩阵同乘一个<abbr class="term" tabindex="0" title="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。" data-tip="向量（Vector）：按顺序排列的一组数。在本课程中，它可以表示词或文本的特征，也可以是注意力计算中的中间结果。">向量<span class="term-en">（Vector）</span></abbr>是 2N，乘上一段序列是 2N·T。整模型的量级就是这样估出来的。</p>
+<p>这条规则的用途是排序。它给出各层的算术量排序；实际延迟还要看访存，算得少的层也可能因为搬运慢而拖时间。</p>
+<h3 id="教学模型的账单">教学模型的账单</h3>
+<p>用一个小配置把账算全：B=1、T=16、词表 2048、宽度 128、1 层、4 头。这是教学假设，真实模型大几个数量级。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">组件</th><th scope="col">浮点运算次数</th></tr></thead><tbody><tr><td>SwiGLU 前馈</td><td>4.227M</td></tr><tr><td>QKV 与输出投影</td><td>2.097M</td></tr><tr><td>语言模型头</td><td>0.524M</td></tr><tr><td>分数与值相乘</td><td>0.131M</td></tr><tr><td>合计</td><td>约 7.0 MFLOPs</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">组件</th><th scope="col">参数量</th></tr></thead><tbody><tr><td>嵌入与绑定输出</td><td>262,144</td></tr><tr><td>注意力投影</td><td>65,536</td></tr><tr><td>SwiGLU 前馈</td><td>132,096</td></tr><tr><td>归一化缩放</td><td>384</td></tr><tr><td>合计</td><td>460,160</td></tr></tbody></table></div>
+<p>按 FP16 存这 460,160 个参数是 0.92 MB，按 FP32 存是 1.84 MB。按 FP16 算，这是一个不到 1 MB 的模型，每次前向仍要做约 700 万次浮点运算。</p>
+<p>把每层的算术量排序，前馈最大，其次是四个投影，然后是输出头，最后是注意力矩阵。前馈占 4.227M，是总和的六成；注意力投影 2.097M，占三成。</p>
+<p>两个表的读法不同。运算表告诉你算术量花在哪，参数表告诉你显存花在哪，两者经常指向不同的层。</p>
+<p>小配置用来把账算清楚；每个数字都能手算。换到<abbr class="term" tabindex="0" title="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。" data-tip="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。">大模型<span class="term-en">（Large Language Model）</span></abbr>，量级大致按比例放大，但瓶颈会换，序列、并发和显存都可能先到上限。</p>
+<p>权重表还解释了<abbr class="term" tabindex="0" title="量化（Quantization）：用更少的位数存权重，比如 16 位压到 4 位，省显存但可能掉精度。" data-tip="量化（Quantization）：用更少的位数存权重，比如 16 位压到 4 位，省显存但可能掉精度。">量化<span class="term-en">（Quantization）</span></abbr>为什么值得做。每个参数的字节数减半，权重占用的显存减半；键值（Key-Value，KV）缓存、激活和运行时缓冲要另算（推断）。精度损失要单独测，省下的显存可能换来质量下降。</p>
+<h3 id="容量规划先算显存">容量规划先算显存</h3>
+<p>权重大小等于参数量乘每个参数的字节数。7B 模型按 FP16 存需要 7×10⁹×2=14×10⁹ 字节，约 14 GB。70B 按同样换算需要 140 GB。</p>
+<p>键值（Key-Value，KV）缓存要单独算。公式是 2×L×B×T×H×d×b：L 是层数，B 是并发，T 是长度，H 是键值头数，d 是头宽，b 是每元素字节数。32 层、32 头、头宽 128、BF16 时，每个 token 每请求占 512 KiB。单请求 4096 上下文要 2 GiB，8 并发要 16 GiB。</p>
+<p>举例：标称 80 GB 的卡装 7B 权重（FP16，14 GB），按十进制算剩 66 GB；1 GiB≈1.074 GB，所以约 61.47 GiB。每个请求 4096 上下文、2 GiB 缓存，理论并发是 61.47÷2≈30.7，只能开 30 个。留出运行时与碎片的余量，教学示意按 28 个规划。</p>
+<p>并发与上下文互相挤占。同样 61.47 GiB 余量，4096 上下文每个 2 GiB，理论 30 个；8192 上下文每个 4 GiB，理论 15 个。要长上下文，就得接受并发下降。</p>
+<p>权重还分精度。BF16 每参数 2 字节，INT8 是 1 字节，INT4 是 0.5 字节。精度换显存，质量要单独测。</p>
+<p>容量规划有顺序：先定权重，再定并发，最后反推能开多长的上下文。顺序反过来，容易在最后一步发现显存不够。</p>
+<p>显存之外还有运行时缓冲。算子临时缓冲、通信缓冲与框架开销通常按权重的一到两成估（推断）。</p>
+<p>失败案例：只按权重选卡。7B 模型看起来 14 GB，一张 24 GB 卡绰绰有余。但 4096 上下文、8 并发要再加 16 GiB，加上运行时开销直接爆显存。规划显存时，把缓存与权重一起计入。</p>
+<h3 id="从资源到时间">从资源到时间</h3>
+<p>推理时间有下界：算力时间与搬运时间取大。设一个 32 层、宽度 4096 的教学模型总参数 6.475B、FP16，权重约 12.95 GB；单步<abbr class="term" tabindex="0" title="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。" data-tip="解码（Decoding）：在这里指自回归生成阶段：利用已有输入和输出继续预测后续词元，直到满足停止条件。">解码<span class="term-en">（Decoding）</span></abbr>要把它读一遍。</p>
+<p>在 2039 GB/s 的<abbr class="term" tabindex="0" title="带宽（Bandwidth）：单位时间能搬运多少数据，解码阶段常被它卡住。" data-tip="带宽（Bandwidth）：单位时间能搬运多少数据，解码阶段常被它卡住。">带宽<span class="term-en">（Bandwidth）</span></abbr>下，光读 12.95 GB 就要 12.95÷2039≈0.0064 秒，约 6.4 毫秒。另一组教学假设取 7.55B 参数、FP16，权重 15.1 GB，搬运约 7.4 毫秒。小批量解码的延迟主要由带宽决定，这条算式就是原因。</p>
+<p><abbr class="term" tabindex="0" title="预填充（Prefill）：生成开始时处理已有输入、建立相关中间状态的阶段，随后利用其结果预测输出。具体调度取决于服务实现。" data-tip="预填充（Prefill）：生成开始时处理已有输入、建立相关中间状态的阶段，随后利用其结果预测输出。具体调度取决于服务实现。">预填充<span class="term-en">（Prefill）</span></abbr>也算一次。5.745×10¹³ 次浮点运算除以 312×10¹² 次/秒，约 184 毫秒，搬运只要 7.4 毫秒（按 15.1 GB 那组）。预填充由算力时间主导，184 毫秒远高于 7.4 毫秒的搬运。</p>
+<p>批处理能摊薄这笔开销。同一次权重读取服务 8 个请求，单 token 的权重读取时间降到八分之一。用户感知的每 token 耗时不一定变短，每张卡的吞吐上去了。</p>
+<p>批大小上去以后，解码会从带宽受限转向算力受限。切换点取决于卡型与内核效率，要实测。</p>
+<p>预填充阶段算力需求高，批处理摊薄的是搬运时间，算力时间基本不变；两个阶段的优化方向不同。</p>
+<h3 id="从资源到钱">从资源到钱</h3>
+<p>单价换算是另一个常用算式。输出 10 美元每百万 token，单个输出 token 就是 10÷10⁶=0.00001 美元。</p>
+<p>容量算完，再乘单价。接口价格按每百万 token 计费。假设输入价为 2 美元、输出价为 10 美元。此处使用美元，前面的元计价例子独立计算。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>C</mi><mo>=</mo><mfrac><msub><mi>T</mi><mtext>in</mtext></msub><msup><mn>10</mn><mn>6</mn></msup></mfrac><mtext> </mtext><msub><mi>p</mi><mtext>in</mtext></msub><mo>+</mo><mfrac><msub><mi>T</mi><mtext>out</mtext></msub><msup><mn>10</mn><mn>6</mn></msup></mfrac><mtext> </mtext><msub><mi>p</mi><mtext>out</mtext></msub></mrow><annotation encoding="application/x-tex">C = \frac{T_{\text{in}}}{10^6}\,p_{\text{in}} + \frac{T_{\text{out}}}{10^6}\,p_{\text{out}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0463em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">in</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">in</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.0463em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">out</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">out</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></div>
+<p>T_in 与 T_out 是输入、输出 token 数，p_in 与 p_out 是每百万 token 的单价。</p>
+<p>一次普通响应按 2000 输入加 500 输出算。输入是 2000×2÷10⁶=0.004 美元，输出是 500×10÷10⁶=0.005 美元，合计 0.009 美元。</p>
+<p>一个 8 次调用的 <abbr class="term" tabindex="0" title="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。" data-tip="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。">Agent</abbr>（智能体），整项任务按 3 万输入加 4 千输出算。输入是 3 万×2÷10⁶=0.06 美元，输出是 4 千×10÷10⁶=0.04 美元。两项合计 0.10 美元，整项任务是单次响应的约 11 倍；平均到每次调用，并没有贵 11 倍。一万次任务就是 1000 美元。</p>
+<p>输入与输出分开计价，原因在生成方式。输入可以并行算，输出逐 token 生成，后者的时间与单价都更高。</p>
+<p>在这个例子里，输入占 0.06/0.10=60%，所以成本主要在输入；把输入压下来，比换更便宜的输出单价有效。如果输出 token 更多，结论可能反过来。</p>
+<p>任务成本要把所有轮次加总。输入、输出、<abbr class="term" tabindex="0" title="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。" data-tip="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。">工具调用<span class="term-en">（Tool Call）</span></abbr>与重试都要计入，只算一次调用会低估。</p>
+<p><abbr class="term" tabindex="0" title="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。" data-tip="训练（Training）：用数据调整模型参数的过程。预训练、微调、偏好学习都属于训练。">训练<span class="term-en">（Training）</span></abbr>也能按资源乘单价算。一个 7B 模型用 8 张 A100 <abbr class="term" tabindex="0" title="微调（Fine-Tuning）：在已经训练好的模型上继续训练，以适应任务或数据。可以更新全部参数，也可以只更新一部分参数。" data-tip="微调（Fine-Tuning）：在已经训练好的模型上继续训练，以适应任务或数据。可以更新全部参数，也可以只更新一部分参数。">微调<span class="term-en">（Fine-Tuning）</span></abbr> 3 小时，约 24 卡时。按每卡时 2 美元算，约 48 美元。价格与口径也会改变结论；价格是快照，换供应商或换区域都要重算。</p>
+<h3 id="训练显存另算一笔">训练显存另算一笔</h3>
+<p>第 20 章已经算过每个参数 16 字节的状态；这里看它怎么落到卡上。训练时每个参数不只有权重。<abbr class="term" tabindex="0" title="梯度（Gradient）：描述参数变化会怎样影响损失的量。优化方法利用它选择参数的更新方向与步幅。" data-tip="梯度（Gradient）：描述参数变化会怎样影响损失的量。优化方法利用它选择参数的更新方向与步幅。">梯度<span class="term-en">（Gradient）</span></abbr>一份、FP32 主权重一份、两个优化器动量各一份。按 BF16 权重 2 字节、梯度 2 字节、主权重 4 字节、动量 8 字节算，合计 16 字节。</p>
+<p>举例：7×10⁹ 个参数乘 16 字节，约 112 GB。单张 80 GB 卡放不下，需要把状态切片到多张卡上。</p>
+<p>按 8 张卡切分，参数状态从 112 GB 摊到每张 14 GB。切分换来了显存，代价是卡间通信与实现复杂度。</p>
+<p>ZeRO（零冗余优化器）分三个阶段切片：先切优化器状态，再切梯度，最后切参数。切得越彻底，通信越多。</p>
+<p>卡的显存与模型大小要一起选。先算参数状态，再算激活，最后留通信与碎片的余量。</p>
+<p>容量规划要分两套：推理算权重与键值缓存，训练算参数状态的倍数。混用会把训练预算估低一个数量级。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>手算只能给量级。内核效率、通信、批处理与碎片都被省略，实际峰值又往往高于静止估算，实测可能差几倍（推断）。所以先按量级判断可行性，再对瓶颈那一层细算；部署前留压测环节，容量规划留两成余量。真实延迟还受显存带宽、调度与排队影响。</p>
+<p>训练与推理的成本结构不同。训练是一次性大额支出，推理是随调用量线性增长的支出。</p>
+<p>KV 缓存会随并发与长度同时增长。上下文翻倍，缓存也翻倍，容量规划要留余量。</p>
+<p>价格与配置有时效性，换供应商或换区域都要重算。工具、检索、<abbr class="term" tabindex="0" title="沙箱（Sandbox）：限制代码能访问的文件、网络和进程的隔离环境。" data-tip="沙箱（Sandbox）：限制代码能访问的文件、网络和进程的隔离环境。">沙箱<span class="term-en">（Sandbox）</span></abbr>与人工接管的成本也要算进任务里。</p>
+<h2 id="自测">自测</h2>
+<ol><li>用 2mkn 规则估算一个 [B,T,d] 乘 [d,d] 的投影，结果是多少？</li><li>7B 模型按 FP16 存权重需要多少显存？</li><li>为什么 8 次调用的 Agent 成本约是单次响应的 11 倍？</li><li>80 GB 卡装 7B 权重（FP16，14 GB）后，按十进制 GB 计算剩余显存。4096 上下文、每个请求 2 GiB 缓存时，理论上能开几个并发？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2309.06180" rel="noreferrer">服务中的键值缓存管理</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-inference-economics.html"><small>上一章</small><span>推理为什么贵：量化、缓存与注意力</span></a>
+  <a class="nav-next" href="ch-multi-agent-frontier.html"><small>下一章</small><span>多智能体、计算机使用与生成式 agent</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

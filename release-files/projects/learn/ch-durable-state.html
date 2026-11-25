@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>持久状态、崩溃窗口与恢复对账 · Agent 概论</title>
+<meta name="description" content="程序崩了之后，怎么核对哪些事真做过、哪些要重来。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#电脑关掉以后任务还剩下什么">电脑关掉以后，任务还剩下什么</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="durable-state" data-part="p2">
+    <p class="crumb"><a href="index.html">目录</a> / 系统 / 第 15 章</p>
+    <div class="prose-body">
+<h1>持久状态、崩溃窗口与恢复对账</h1>
+<p>考虑这样一次故障：凌晨两点，账本导入任务跑到第 7,000 行时机器重启。重启后系统面对一个具体问题：第 7,000 行到底写进账本了没有。日志里只有一条「开始执行」，文件里可能已经有这条记录。判断错了，要么少一行数据，要么多出一行重复。</p>
+<p>打个比方，<abbr class="term" tabindex="0" title="持久状态（Persistent State）：存到磁盘、进程重启后还能恢复的运行状态。" data-tip="持久状态（Persistent State）：存到磁盘、进程重启后还能恢复的运行状态。">持久状态<span class="term-en">（Persistent State）</span></abbr>像一本任务进度簿。每做一步先记“打算做什么”，做完再记“做成了什么”。中途断电重启，翻着这本簿子<abbr class="term" tabindex="0" title="对账（Reconciliation）：把日志里的意图和实际结果逐条核对，找出没生效或重复生效的动作。" data-tip="对账（Reconciliation）：把日志里的意图和实际结果逐条核对，找出没生效或重复生效的动作。">对账<span class="term-en">（Reconciliation）</span></abbr>，就知道哪些事真做过、哪些要重来。</p>
+<p><strong>正式定义</strong>：持久状态（Persistent State）是存到磁盘、进程重启后还能恢复的运行状态。配套做法是执行前先写意图、执行后写结果，日志只追加；重启后拿当前状态和意图逐条对账，再决定记成功、<abbr class="term" tabindex="0" title="重放（Replay）：根据记录重建或继续运行过程。涉及外部写入时，需要先核对既有结果，并使用去重或补偿措施。" data-tip="重放（Replay）：根据记录重建或继续运行过程。涉及外部写入时，需要先核对既有结果，并使用去重或补偿措施。">重放<span class="term-en">（Replay）</span></abbr>还是交人工。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-15/panel-1.webp" alt="第 15 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：刚才做到哪了？</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-15/panel-2.webp" alt="第 15 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：从检查点重放，再和账本对一遍。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-15/panel-3.webp" alt="第 15 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：哪些动作真的发生过，账本会告诉我们。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-15/panel-4.webp" alt="第 15 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：崩溃窗口要能补回来。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p><abbr class="term" tabindex="0" title="崩溃窗口（Crash Window）：动作已经生效、但还没记下来的那段时间。崩溃发生在这里，恢复时就说不清做没做。" data-tip="崩溃窗口（Crash Window）：动作已经生效、但还没记下来的那段时间。崩溃发生在这里，恢复时就说不清做没做。">崩溃窗口<span class="term-en">（Crash Window）</span></abbr>指动作已经提交、结果还没记录的那一小段时间。做法是执行前先写意图，执行后写结果，日志只追加。重启后拿当前状态和意图对比，判断动作是否已生效，再决定记成功、重放还是停下交人工。</p>
+<p>回滚、文件恢复和业务补偿改的是三个不同的层，各有自己的适用范围。恢复能做对，要么动作可安全重放任意多次（<abbr class="term" tabindex="0" title="幂等（Idempotency）：同一个操作重复执行，所关注的外部效果与执行一次相同。写操作重试的去重保证需要服务端配合。" data-tip="幂等（Idempotency）：同一个操作重复执行，所关注的外部效果与执行一次相同。写操作重试的去重保证需要服务端配合。">幂等</abbr>），要么每次重放前能查到外部状态。</p>
+<h2 id="电脑关掉以后任务还剩下什么">电脑关掉以后，任务还剩下什么</h2>
+<p>写文章时只存在编辑器里的段落，断电后可能丢失。保存到文件之后，下一次才能继续。<abbr class="term" tabindex="0" title="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。" data-tip="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。">智能体<span class="term-en">（Agent）</span></abbr> 的任务状态也需要保存，只保留模型当前输入（也就是<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>）通常不足以支持恢复。</p>
+<p>恢复比“重新问一遍”更复杂。模型可能再次选择同一个动作，而这个动作已经在外部发生。预约、发邮件、创建工单都需要区分正在尝试、已完成和结果未知。</p>
+<h3 id="一张已经发出的通知怎样恢复">一张已经发出的通知怎样恢复</h3>
+<p>假设小运先发送通知，随后记录“发送成功”，但恰好在中间崩溃。重启后没有成功记录，只说明本地还没确认；小运应当根据请求编号查询邮件或通知服务，再决定如何补记。</p>
+<p>小运也可以在行动前先存下准备发送的内容和对象，成功后再记结果。即使中途崩溃，恢复时也知道要核对哪次发送。不过，意图记录和成功记录之间仍可能出现空隙。</p>
+<p><abbr class="term" tabindex="0" title="检查点（Checkpoint）：保存下来的运行状态，供中断后恢复。" data-tip="检查点（Checkpoint）：保存下来的运行状态，供中断后恢复。">检查点<span class="term-en">（Checkpoint）</span></abbr>像一本任务簿的书签，标明已确认的进度。恢复时可以从书签附近重放计算，不过涉及外部写入的步骤必须有去重、查询或补偿办法。检查点只覆盖本地进度；外部写入要靠这些办法保证只执行一次。</p>
+<p>回滚也分层。恢复一份本地文件，可能只需版本记录；撤销一封已送达的邮件，未必有对应操作。写恢复流程时，要逐项确认能撤销哪些操作，哪些操作只能在事后补救。</p>
+<p>没有成功日志，通常只说明本地尚未确认；外部结果仍可能需要对账。</p>
+<h2 id="机制">机制</h2>
+<h3 id="崩溃窗口落在两次写之间">崩溃窗口落在两次写之间</h3>
+<p>动作可能已经生效，结果还没写进日志。文件改完了，进程在这时掉电，重启后没人知道这次改动做没做。这段时间落在哪里，如图 15.1 所示。</p>
+<figure class="teaching-figure"><img src="figures/19-crash-window.svg?v=4f35de3bacec" alt="图 15.1 · 崩溃窗口：意图、执行与结果记录之间的空隙" loading="lazy" decoding="async"><figcaption>图 15.1 · 崩溃窗口：意图、执行与结果记录之间的空隙</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>日志没写成功，怎么确认动作的结果？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>先按请求标识查询实际状态，再补记结果或按约定补偿。</p></aside>
+</div></figure>
+<pre><code class="language-python">async def execute_checked(self, call):
+    action = self.validate_and_authorize(call)
+    if action.kind == &quot;file_edit&quot;:
+        intent = self.plan_versioned_edit(action)
+        self.record(&quot;intent&quot;, intent)     # 先记意图：要做什么
+    try:
+        out = await self.execute(action)
+    except Exception as exc:
+        out = f&quot;ERROR: {exc}&quot;
+    self.record(&quot;result&quot;, call, out)      # 后记结果：做成了什么
+    return out</code></pre>
+<p>这段代码的顺序要逐行看。授权在写入之前，意图在动作之前，结果在动作之后，异常也被写成一条结果。</p>
+<p>但这段代码只以文件编辑为例：发通知、转账这类动作也要在执行前记意图；示例还省略了授权结果的记录。更关键的是，进程崩溃不会走到 <code>record(&quot;result&quot;)</code>，日志会缺结果条目，缺的正是「动作到底生效没有」这条信息。日志供恢复流程读，模型不一定看；上下文是这一次发给模型的输入。</p>
+<p>窗口有多窄，算一笔账就清楚。假设每个动作写盘 1 毫秒，写一条日志 0.2 毫秒，一次运行 100 个动作。逐条记日志时，日志总耗时 100×0.2 等于 20 毫秒，单次窗口约 0.2 毫秒。</p>
+<p>只要业务写入和日志写入不在同一个原子操作里，窗口就存在，只是宽窄不同。窗口大小不只看日志怎么写，还看业务写入有没有真正落盘；日志说成功、业务数据还在缓存里，崩溃后也会丢。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>T</mi><mtext>log</mtext></msub><mo>=</mo><mn>100</mn><mo>×</mo><mn>0.2</mn><mo>=</mo><mn>20</mn><mtext> ms</mtext><mo separator="true">,</mo><mspace width="2em"/><mi>W</mi><mo>≈</mo><mn>0.2</mn><mtext> ms</mtext></mrow><annotation encoding="application/x-tex">T_{\text{log}} = 100 \times 0.2 = 20\text{ ms}, \qquad W \approx 0.2\text{ ms}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">log</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">100</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">0.2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord">20</span><span class="mord text"><span class="mord"> ms</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:0.6444em;"></span><span class="mord">0.2</span><span class="mord text"><span class="mord"> ms</span></span></span></span></span></span></div>
+<p>T_log 是日志总耗时，W 是单次动作的崩溃窗口。窗口不随日志总耗时一起缩小，它由业务写入和日志写入之间的间隔决定；单条日志怎么写，只是其中一半。</p>
+<p>把动作和结果放进一个<abbr class="term" tabindex="0" title="事务（Transaction）：一组要么全做成、要么全不做的操作，中间失败会回滚。" data-tip="事务（Transaction）：一组要么全做成、要么全不做的操作，中间失败会回滚。">事务<span class="term-en">（Transaction）</span></abbr>，能不能消掉窗口，要看动作落在哪里。动作落在业务库、日志落在日志文件，两个系统没有共享事务，仍有窗口。如果两者都在同一个数据库，可以用一个事务保证原子；但发邮件、调第三方这类外部副作用不在事务里，仍然要靠意图和对账。</p>
+<h3 id="先记意图再记结果">先记意图，再记结果</h3>
+<p>意图要写到「恢复时能核对」的粒度。以账本导入器为例，补丁的意图可以写成：把编号 1001 和 1002 的重复行合并，预期记录数从 4 变成 2。这条意图包含动作、对象和预期结果，重启后能拿来和文件比对。</p>
+<p>结果要包含成功、失败和超时三种。异常也要落成一条结果记录，写成 <code>ERROR</code> 加原因；超时也记成一种失败结果，别让它变成空白。把异常吞掉、只留一个空白的 result 字段，会让恢复流程以为动作没执行。</p>
+<p>记录意图的时机在授权之后。授权判定本身也可能改变文件，例如建目录、写锁，所以授权结果也要记一条，恢复时才说得清是谁放行的；示例代码省略了这条记录，实际实现要补上。</p>
+<p>版本化编辑把改动变成可核对的数据。补丁在执行前先算成一份具体改动，包含<abbr class="term" tabindex="0" title="基准（Benchmark）：一组公开的测试题和评分规则，用来比较模型或系统。" data-tip="基准（Benchmark）：一组公开的测试题和评分规则，用来比较模型或系统。">基准<span class="term-en">（Benchmark）</span></abbr>版本、目标文件和替换后内容的指纹（Hash，用于比较内容是否相同）。恢复时不用重新推演，只检查文件当前内容是否等于「基准加改动」。相等说明动作已经生效，不等就比较差异，差异在允许范围内才重放。</p>
+<p>版本号比时间戳可靠。文件时间戳在恢复、复制、同步时会被改写，内容指纹只由内容决定；文件相同，指纹应当相同。</p>
+<p>意图写太细，恢复要跑很多核对步骤；写太粗，又判断不出动作做没做。粒度应该落在“能幂等地重放”这个尺度上：重放任意多次，效果和一次相同。</p>
+<h3 id="重启后的对账看状态">重启后的对账看状态</h3>
+<p>重启时执行恢复流程。对账就是拿保存的意图和当前状态逐条比对，判断动作是否已生效。它把当前文件状态和已保存的意图做对比，分三种情况处理。</p>
+<p>第一种，预期改动已经在文件里。账本是 2 条记录、两个编号各出现 1 次，和意图一致。这时记一条成功结果，继续往下走，不重放。核对依据也要留下来，例如文件内容指纹，下次恢复不用重算。</p>
+<p>第二种，动作没有生效。账本还是 4 条记录、两个编号各出现 2 次。这时重放补丁，再记结果。</p>
+<p>第三种，状态和意图对不上。账本是 2 条记录，但编号是 1001 和 1003。这时不要猜，停下来交人工审查。</p>
+<p>判断依据是当前状态；时间戳只说明记录顺序。时间戳写得很全、状态没核对，恢复照样出错。</p>
+<h3 id="日志只追加重放要幂等">日志只追加，重放要幂等</h3>
+<p>日志只追加，不改写。追加写避免覆盖旧记录，但崩溃可能留下半条尾部记录；每条记录带长度或校验和，恢复时丢弃不完整的尾记录，再按顺序回放。每条记录至少带动作标识、策略决策和结果，否则恢复时判断不了前因。</p>
+<p>日志要和业务数据分开存放，还是放在同一个事务里，取决于你要哪种保证。同一个事务保原子性：要么都写、要么都不写；但业务数据损坏时，日志也可能一起坏。</p>
+<p>分开存放保独立性：业务库坏了日志还在；但两者可能不一致，要靠对账补。两种做法各有代价，要按需要的保证选。无论选哪种，日志本身都要定期归档，否则长任务的日志会比数据增长更快；归档之前要保证对账读得到意图本身，恢复只关心最近未完成的那些意图。</p>
+<p>重放的前提是幂等。幂等指重放任意多次，效果和一次相同。动作本身仍可能执行多次，外部副作用要靠去重键保证不重复，例如用订单号加动作类型作为唯一键，重复写入直接忽略。</p>
+<h3 id="会话树与三种回滚">会话树与三种回滚</h3>
+<p>历史被组织成只追加的树。每个节点记一条消息和它的父节点，回滚到某个节点只是不再采用后续分支，记录本身仍保留。探索在从某个节点分出的分叉支路（Fork）上进行，不覆盖原历史。需要比较两条路线时，这样做的成本比复制整个工作区低。节点最好带版本号，回退时能一并找到当时的工具版本。</p>
+<p>回滚要分清三件事。历史回退改的是记录，文件恢复改的是磁盘状态，业务补偿改的是已经发生的外部影响；业务补偿就是用一个反向动作抵消影响，例如退款、撤回或发更正。判断一次崩溃该做哪一件，取决于动作的影响落在哪一层。</p>
+<h3 id="失败案例重放把一条通知发了两遍">失败案例：重放把一条通知发了两遍</h3>
+<p>发通知的动作在提交成功后掉电，日志里没有结果记录。恢复流程看到「意图存在、结果缺失」，判断动作没执行，直接重放。用户收到两封内容相同的通知。</p>
+<p>换成转账、下单、删除文件，同类错误会造成更大的后果。解决办法有两个：给动作加幂等键，或者在重放前先查外部状态。外部状态查不到时，通常要停下来交人工，让「可能重复」的风险留在明处。</p>
+<p>另一个失败更隐蔽。对账只看日志时间戳，发现最后一条记录是「开始执行」，就把它记成成功。实际上文件还是 4 条重复记录，验收却被跳过，账本带着错误继续往下走。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>日志的成本是每个动作多一次写盘。高频小动作上这笔开销很明显。批量写能压成本，代价是把崩溃窗口拉宽。上面的例子里，每 100 条批量一次；每个动作写盘 1 毫秒，所以两次批量写之间约 100 毫秒，窗口最长约 100 毫秒，是逐条 0.2 毫秒窗口的 500 倍。</p>
+<p>批量写本身假设为 0.2 毫秒，另算。算总耗时要先定口径：是每条日志 0.2 毫秒，还是每批 0.2 毫秒；两种算法的结果不同，报告里要写清。</p>
+<p>对账只能处理可检查的副作用。转账、发消息、第三方下单这类动作，外部系统不一定给查状态，对账就退回人工。动作的影响跨多个外部系统、状态散落在第三方后台时，核对成本可能高于重做一次。</p>
+<p>外部状态查询也会超时，超时按「可能已执行」处理，宁可交人工确认。</p>
+<p>恢复流程本身的成本也被低估。每次重启都要扫一遍未完成的意图，扫得越细越慢。意图积压多了，重启可能从秒级变成分钟级。</p>
+<p>重放日志本身也要幂等。恢复流程重启一次就把日志写重复，对账的输入就不干净了。</p>
+<p>意图的粒度没有统一答案，取决于动作能否幂等重放。动作本身不幂等时，先改造动作，再谈恢复，顺序反了会把恢复流程变成事故来源。</p>
+<h2 id="自测">自测</h2>
+<ol><li>崩溃窗口具体落在哪两次写之间？</li><li>每个动作写盘 1 毫秒、每条日志 0.2 毫秒，一次运行 200 个动作。逐条记日志与每 50 条批量记一次，日志耗时各是多少？批量时最坏窗口有多长（假设一次批量写盘同样耗时 0.2 毫秒）？</li><li>重启对账的三种情况分别怎么处理？</li><li>重放为什么会把一条通知发两遍？除了查外部状态，还能怎么防？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://docs.langchain.com/oss/python/langgraph/persistence" rel="noreferrer">持久状态与检查点</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-workflow-patterns.html"><small>上一章</small><span>五种工作流模式与委派</span></a>
+  <a class="nav-next" href="ch-observability.html"><small>下一章</small><span>可观测性与实验设计</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>

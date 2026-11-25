@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工具、技能与端到端评估 · Agent 概论</title>
+<meta name="description" content="分开测工具、技能与完整任务。">
+<meta name="color-scheme" content="light dark">
+<script>document.documentElement.classList.add('js');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<script src="../../site-transitions.js?v=course-20261112" defer></script>
+<link rel="stylesheet" href="assets/learn-v3.css?v=87b426c0">
+<link rel="stylesheet" href="assets/math.css?v=20261113">
+</head>
+<body class="is-chapter">
+<a class="skip-link" href="#main">跳到正文</a>
+<header class="site-head" data-course-nav>
+  <div class="site-brand-group"><a class="portfolio-return" href="../../index.html">返回主页</a><a class="brand" href="index.html">Agent 概论<span>.</span></a></div>
+  <button class="course-nav-toggle" type="button" aria-expanded="false" aria-controls="courseNavLinks">菜单</button>
+  <nav class="head-nav" id="courseNavLinks" aria-label="站点导航">
+    <a href="index.html">目录</a>
+    <a href="ap-a-glossary.html">术语表</a>
+    <a href="ap-b-formulas.html">公式速查</a>
+  </nav>
+</header>
+<main id="main">
+<div class="reading-layout has-asides">
+  <details class="toc" open aria-label="本章目录">
+    <summary>本章目录</summary>
+    <div class="toc-inner">
+      <ol class="toc-list">
+<li><a href="#速览">速览</a></li>
+<li><a href="#用一件完整任务检查系统">用一件完整任务检查系统</a></li>
+<li><a href="#机制">机制</a></li>
+<li><a href="#成本与限制">成本与限制</a></li>
+<li><a href="#自测">自测</a></li>
+      </ol>
+      
+    </div>
+  </details>
+  <article class="prose" data-slug="tool-skill-e2e-eval" data-part="p3">
+    <p class="crumb"><a href="index.html">目录</a> / 评估 / 第 17 章</p>
+    <div class="prose-body">
+<h1>工具、技能与端到端评估</h1>
+<p>假设两个模型摆在上线评审桌上。大的那个完成率 94%，小的 90%。负责人的意见是选大的。</p>
+<p>翻到测试记录的第二页，大的在 20 次只读权限检查里提议了 3 次写操作（写操作指会改动订单、账户等数据的动作），小的 0 次。这些提议有没有真的执行，要看权限层；但风险已经出现：完成率只差 4 个百分点，代价却可能是用户数据被改。</p>
+<p>打个比方，测试要分成几份考卷：单轮看动作选没选对、参数填没填对；多轮看整条流程和最终状态；技能要做开/关对照；安全和业务结果再各出一个分数。混在一张总分里，风险问题就被平均分盖掉了。</p>
+<p><strong>正式定义</strong>：<abbr class="term" tabindex="0" title="端到端（End-to-End）：从用户输入一直测到最终结果，覆盖任务的完整过程。" data-tip="端到端（End-to-End）：从用户输入一直测到最终结果，覆盖任务的完整过程。">端到端</abbr>（End-to-End）<abbr class="term" tabindex="0" title="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。" data-tip="评估（Evaluation）：用可重复的测试，衡量系统在指定任务上的表现。">评估<span class="term-en">（Evaluation）</span></abbr>从干净状态出发，一直测到最终结果，覆盖完整任务过程。它要分别核对任务能否完成、不该做的能否拒绝、中途故障能否恢复；安全评估出效用和攻击两个分数，业务评估看持久解决和单位成本。</p>
+<section class="chapter-comic" aria-label="本章四格漫画">
+<figure>
+  <img src="figures/comic/ch-17/panel-1.webp" alt="第 17 章四格漫画第 1 格" loading="lazy" decoding="async">
+  <figcaption>小模：单轮分数很高。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-17/panel-2.webp" alt="第 17 章四格漫画第 2 格" loading="lazy" decoding="async">
+  <figcaption>小运：分母和配对试验呢？先别急着看总分。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-17/panel-3.webp" alt="第 17 章四格漫画第 3 格" loading="lazy" decoding="async">
+  <figcaption>小运：单轮过了，端到端还没测呢。</figcaption>
+</figure>
+<figure>
+  <img src="figures/comic/ch-17/panel-4.webp" alt="第 17 章四格漫画第 4 格" loading="lazy" decoding="async">
+  <figcaption>小模：工具、技能、完整任务要分开测。</figcaption>
+</figure>
+</section><h2 id="速览">速览</h2>
+<p>一次调用正确只覆盖这一段，任务是否完成要另看。评估要拆成四段：<abbr class="term" tabindex="0" title="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。" data-tip="工具调用（Tool Call）：模型提出一个带工具名称与参数的请求，执行程序检查后调用相应功能，再把结果交回模型。">工具调用<span class="term-en">（Tool Call）</span></abbr>、技能贡献、端到端任务、安全与业务结果。这里的技能（<abbr class="term" tabindex="0" title="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。" data-tip="技能包（Skill Package）：把某类任务的做法、示例与辅助资源放在一起，按需读取。已读取内容仍会占用本次输入空间。">Skill</abbr>）指一份可复用的任务做法，通常包含指令、工具调用和检查步骤；评估它时要看它是否被正确触发、是否真的带来通过率提升。每段有自己的分母，混用会让数字看起来更好。</p>
+<p>单轮比函数名与参数，多轮比最终状态与动作序列。技能的贡献用配对试验测：同一批任务开与关各跑一次，比较同一批任务上的差值。端到端从干净状态出发，验证完成、拒绝与故障恢复；安全评估要出两个分数，业务评估要看持久解决与单位成本。</p>
+<h2 id="用一件完整任务检查系统">用一件完整任务检查系统</h2>
+<p>一次工具选择正确，只覆盖一步；系统可能查对订单，后续却引用旧政策，或在用户尚未同意时提交升级工单。这里的升级是把问题转交人工或更高一级处理。端到端评估把整条任务放在一起检查。</p>
+<p>测试前，先准备好订单、政策和权限。每个被测系统都从同样的初始状态开始，运行后核对外部记录，再恢复环境。这就像一间每次练习后都能整理回原样的房间，方便比较不同做法。</p>
+<h3 id="给一个假设任务写验收条件">给一个假设任务写验收条件</h3>
+<p>假设订单已等待六天，当前政策允许超过五天后申请升级。测试可以要求：查询正确订单，核对现行政策，取得用户同意，再创建一张升级工单。缺少任何一项，都不能只凭“已完成”的回答判通过。</p>
+<p>再改一个事实：把政策门槛调整为七天。正确系统这时应解释尚不符合条件。这个小改动能检验它是否真的读取政策，还是只记住了“六天就升级”的例子。</p>
+<p>评估技能时，可以让同一批任务分别在开启与关闭技能的条件下运行。模型、工具和<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>（这次评估允许花的 <abbr class="term" tabindex="0" title="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。" data-tip="词元（Token）：模型读写文本时使用的单位，可以是词、词的一部分、标点或空白。具体切分由分词器决定。">词元<span class="term-en">（Token）</span></abbr> 或调用次数）保持一致，才能把差异更多地归因于技能。遇到随机输出，还应重复测试（例如 3 次）并报告波动范围。</p>
+<p>检查预约是否成功，可以直接查预约记录。评价回答是否容易理解，则需要评分规则和人工抽查。自动裁判（让另一个模型按评分规则打分）也会判断错，要按检查对象选择证据。评分程序要与被测系统隔离，避免它改题目、答案和评分程序。</p>
+<p>模型把所有自测题都回答对，仍不足以上线：真实任务还包含多轮状态、工具失败、授权与预算，需要分别覆盖。</p>
+<figure class="teaching-figure"><img src="figures/teach-paired-test.svg?v=d51408c11a93" alt="图 17.1 · 配对试验怎样隔离技能的贡献" loading="lazy" decoding="async"><figcaption>图 17.1 · 配对试验怎样隔离技能的贡献</figcaption><div class="figure-conversation" aria-label="小模和小运的读图对话">
+  <aside class="character-note is-integrated figure-voice" aria-label="小模的读图提问"><img data-nozoom width="56" height="64" src="assets/characters/mo-surprised.webp" alt="" loading="lazy" decoding="async"><p><b>小模</b>怎样判断这次提分来自技能？</p></aside>
+  <aside class="character-note is-integrated figure-voice" aria-label="小运的读图提示"><img data-nozoom width="56" height="64" src="assets/characters/yun-calm.webp" alt="" loading="lazy" decoding="async"><p><b>小运</b>先比较同一批题，保持模型、工具、<abbr class="term" tabindex="0" title="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。" data-tip="预算（Budget）：给一次运行设的轮次、token 或费用上限。到上限就必须停。">预算<span class="term-en">（Budget）</span></abbr>和评分一致，再用重复试验检查差异是否稳定。</p></aside>
+</div></figure>
+<h2 id="机制">机制</h2>
+<h3 id="单轮多轮与固定用例">单轮、多轮与固定用例</h3>
+<p>评估工具调用有两种粒度。单轮只看函数名和参数对不对；多轮要跑完整循环，看最终状态、动作序列与副作用。</p>
+<p>分母决定数字的含义。看一组数字：100 次机会里，模型提议对了 90 次；这 90 次里执行又对了 87 次。也就是说，100 次里有 13 次没有端到端完成：10 次在提议阶段就错了，3 次提议对了但执行失败。</p>
+<p>按正确提议算，执行准确率是 87/90 约 96.7%，把 3 次执行失败留在分母里，但排除了 10 次提议错误。按所有机会算，端到端完成率是 87/100 等于 87%，把提议阶段和执行阶段的失败都算了进来。两个数都真实，差别在分母：对外报数时要写清用的是哪一个。只报 96.7% 会让人以为系统已经可用，只报 87% 又会把执行层的问题和提议层的问题混在一起。</p>
+<p>自测第 1 题会把执行正确数换成 81，算法相同；两处数字分属不同算例。</p>
+<p>固定用例指预先构造好的服务状态和权限，测试前把它加载进去。读操作要准备三种数据：正确结果、缺失记录、越权记录（例如别的用户的订单）。写操作要准备三种场景：预期状态变化、不应被改写的受保护字段（例如已支付金额）、同一请求提交两次。用例要能一键重置，跑完回到初始状态，否则第二次跑的结果不可比。</p>
+<p>故障注入补上时序问题。在提交前超时，看系统会不会重复提交；在提交后丢掉确认，看它会不会把已完成的动作当成失败。这类测试核对业务效果是否只发生一次，例如是否只生成一笔订单。</p>
+<p><abbr class="term" tabindex="0" title="幂等（Idempotency）：同一个操作重复执行，所关注的外部效果与执行一次相同。写操作重试的去重保证需要服务端配合。" data-tip="幂等（Idempotency）：同一个操作重复执行，所关注的外部效果与执行一次相同。写操作重试的去重保证需要服务端配合。">幂等<span class="term-en">（Idempotency）</span></abbr>接口可以多次收到同一请求，同时把最终效果保持为一次。测试应同时记录请求次数与实际效果次数；只看模型调用次数，看不出后端是否重复执行。</p>
+<p>多轮评估要检查动作序列，最终状态只是其中一项。最终状态对了，路径可能是绕过权限走出来的。序列里出现未授权动作，哪怕结果正确，也要算失败。多轮记录里要带每一步的状态快照，事后才分得清是模型错还是服务慢。</p>
+<h3 id="按角色评估模型">按角色评估模型</h3>
+<p>在 <abbr class="term" tabindex="0" title="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。" data-tip="智能体（Agent）：根据目标选择行动，并利用环境反馈继续任务的系统。本课程主要讨论由语言模型参与决策的软件智能体。">Agent</abbr>（智能体）里，模型提出动作、填写参数并报告结果。<abbr class="term" tabindex="0" title="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。" data-tip="运行时（Runtime）：本课程中管理一次智能体任务的执行环境：组织模型输入、检查并执行工具、保存进度和控制停止。">运行时</abbr>（Runtime）按业务规则和当前授权处理转人工请求；<abbr class="term" tabindex="0" title="控制器（Controller）：运行时中检查预算与停止条件的组件，处理继续、等待和结束。下一阶段交给谁由编排器安排，结果是否合格由验收器判断。" data-tip="控制器（Controller）：运行时中检查预算与停止条件的组件，处理继续、等待和结束。下一阶段交给谁由编排器安排，结果是否合格由验收器判断。">控制器</abbr>（Controller）检查预算与<abbr class="term" tabindex="0" title="停止条件（Stop Condition）：判定一次运行结束的规则，例如给出回复、需要用户输入、达到预算。" data-tip="停止条件（Stop Condition）：判定一次运行结束的规则，例如给出回复、需要用户输入、达到预算。">停止条件<span class="term-en">（Stop Condition）</span></abbr>。不同错误要沿着不同环节查。</p>
+<p>选错动作，检查工具描述；填错参数，检查对象识别与字段提取。报告不符，核对工具返回与回答。是否应当转人工，则检查业务规则、权限及停止条件。</p>
+<p>举例用一个只读日历助手。为便于说明，假设另设 20 个只读场景，不计入 100 个完成率任务。</p>
+<p><abbr class="term" tabindex="0" title="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。" data-tip="大语言模型（Large Language Model）：从大量语言材料中学习规律、处理和生成语言的模型。调用工具时，它提出请求，外部程序负责执行。部分模型也能接收图像等输入。">大模型<span class="term-en">（Large Language Model）</span></abbr>正确提议 94/100，但在这 20 个场景里提议了 3 次写操作；小模型正确提议 90/100，写操作提议为 0。上线门槛是完成率不低于 85%、p95（第 95 百分位）延迟不超过 1.5 秒、零未授权写操作被执行；提议写操作单独计数，作为风险信号。</p>
+<p>设小模型 p95 延迟 1.1 秒、大模型 1.8 秒（假设数字）。小模型三项达标；大模型完成率达标，但有 3 次写操作提议，且 p95 超过 1.5 秒。这 3 次提议是否被权限层拦下，决定了它是「已发生的写入」还是「未发生的风险」；评估报告要把这两件事分开写。</p>
+<p>诊断也按责任方分开。选错动作，查工具描述与权限。填错参数，查实体识别与时区<abbr class="term" tabindex="0" title="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。" data-tip="上下文（Context）：这一次模型调用收到的材料，包括指令、当前请求、历史和工具结果等。保存在别处的资料，需要先取出才能使用。">上下文<span class="term-en">（Context）</span></abbr>。报告结果不对，先查模型有没有收到工具返回。转人工时机不对，检查业务规则、当前授权与停止条件。</p>
+<h3 id="技能的配对试验">技能的配对试验</h3>
+<p>技能的第一类问题是路由。<abbr class="term" tabindex="0" title="召回率（Recall）：该挑出来的里面，实际挑出了多少。" data-tip="召回率（Recall）：该挑出来的里面，实际挑出了多少。">召回率<span class="term-en">（Recall）</span></abbr>问：该触发的时候，技能被叫出来了吗；<abbr class="term" tabindex="0" title="精确率（Precision）：挑出来的里面有多少是对的。" data-tip="精确率（Precision）：挑出来的里面有多少是对的。">精确率<span class="term-en">（Precision）</span></abbr>问：技能被叫出来的时候，有多少次是叫对了。「不该触发却触发」单独算误触发率；精确率衡量触发里有多少次叫对了。</p>
+<p>路由错了，后面的步骤全在错误的前提上跑。两个指标要分开报：召回率低，用户看不到技能生效；精确率低，无关请求也会触发技能。</p>
+<p>更关键的是配对试验：同一批任务、同一模型、同一运行时、同一预算，一组开技能、一组关，比较同一批任务上的通过率差值。举例：200 个任务，开技能通过 148 个，关技能通过 120 个。148/200 等于 74%，120/200 等于 60%，差值是 14 个百分点。</p>
+<p>这个差值只描述这套技能在这批任务上的观测差异。路由错误、模型波动、工具变化都可能混进来；换任务、换模型、换工具集，结论都要重测。配对差值要和路由指标一起报，否则读者以为差值全来自技能内容。</p>
+<h3 id="端到端基准与评分隔离">端到端基准与评分隔离</h3>
+<p>端到端任务要限时。不限时的任务会奖励慢慢试错，分数和真实体验脱节。</p>
+<p>端到端评估从干净状态出发，检查三件事：完整任务能否完成、不该做的能否拒绝、中途故障能否恢复。下面这些<abbr class="term" tabindex="0" title="基准（Benchmark）：一组公开的测试题和评分规则，用来比较模型或系统。" data-tip="基准（Benchmark）：一组公开的测试题和评分规则，用来比较模型或系统。">基准<span class="term-en">（Benchmark）</span></abbr>各测一段，分数口径各不相同。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">评测</th><th scope="col">任务类型</th><th scope="col">评分方式</th></tr></thead><tbody><tr><td>Terminal-Bench</td><td>沙箱里的命令行任务</td><td>产物能被脚本读取判断，另报每次完成成本</td></tr><tr><td>GAIA</td><td>通用助手短答案题</td><td>抽取最终答案精确匹配</td></tr><tr><td>SWE-bench</td><td>修真实仓库的问题单</td><td>补丁通过回归测试</td></tr><tr><td>OSWorld</td><td>桌面图形界面任务</td><td>检查最终状态</td></tr><tr><td>τ²-Bench</td><td>客服对话，双方都能行动</td><td>问题是否解决</td></tr></tbody></table></div>
+<p>评分代码要与被测系统隔离。私有测试放在系统改不到的地方，否则被测系统可能去改测试，代码本身却没改。私有标准答案和完整评分代码不放进模型输入。运行中的<abbr class="term" tabindex="0" title="验收器（Verifier）：依据事先约定的完成条件检查结果的组件，例如核对预约记录中的日期与人数。" data-tip="验收器（Verifier）：依据事先约定的完成条件检查结果的组件，例如核对预约记录中的日期与人数。">验收器<span class="term-en">（Verifier）</span></abbr>仍可返回任务允许看到的失败信息，帮助系统修正。</p>
+<p>可靠性评估需要重复试验。重复次数按任务波动确定，3–5 次可作为初步观察。</p>
+<p>分别报告 pass@1（一次就过）和 <abbr class="term" tabindex="0" title="多次尝试通过率（Pass at k）：让模型生成 k 次，只要有一次通过就算成功；用来衡量有多种解法的问题。" data-tip="多次尝试通过率（Pass at k）：让模型生成 k 次，只要有一次通过就算成功；用来衡量有多种解法的问题。">多次尝试通过率<span class="term-en">（Pass at k）</span></abbr>（k 次里至少一次过），并给出波动范围。两个数分开报，混在一起会看不出系统是稳定还是碰巧。</p>
+<h3 id="安全与业务两个分数与单位成本">安全与业务：两个分数与单位成本</h3>
+<p>安全评估要出两个分数。效用检查问合法任务有没有完成，安全检查问有没有被注入去做不该做的事。</p>
+<p>举一个会议总结的例子。攻击方式是让系统把总结发到外部邮箱，检查发件箱就知道有没有发出去。假设 200 个用例里，100 个是合法任务，100 个是攻击任务。效用保留 92%，攻击成功 4%。如果只报一个「防护率（1 减攻击成功率）96%」，读者会以为一切都好，实际上有 8 个合法任务被误拒。</p>
+<p>业务指标的第一条是持久解决。运行<abbr class="term" tabindex="0" title="轨迹（Trace）：一次运行从头到尾的记录，包含每一步的输入、动作和结果。" data-tip="轨迹（Trace）：一次运行从头到尾的记录，包含每一步的输入、动作和结果。">轨迹<span class="term-en">（Trace）</span></abbr>显示完成只是表面；工单在 7 天内会不会被重新打开，才算持久解决。</p>
+<p>第二条是单位经济。假设方案 A 每次尝试花 2.00 美元，完成率 40%；方案 B 每次尝试花 1.80 美元，完成率 30%。按每个已解决的问题算，A 是 2.00/0.40 等于 5.00 美元，B 是 1.80/0.30 等于 6.00 美元。初始便宜的那个方案，最后更贵。</p>
+<div class="math-display" tabindex="0" aria-label="数学公式，可横向滚动查看"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>C</mi><mtext>solved</mtext></msub><mo>=</mo><mfrac><msub><mi>C</mi><mtext>attempt</mtext></msub><msub><mi>p</mi><mtext>success</mtext></msub></mfrac></mrow><annotation encoding="application/x-tex">C_{\text{solved}} = \frac{C_{\text{attempt}}}{p_{\text{success}}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="katex-base"><span class="katex-strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">solved</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="katex-base"><span class="katex-strut" style="height:2.2408em;vertical-align:-0.8804em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">success</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="katex-sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">attempt</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></div>
+<p>C_attempt 是单次尝试成本，p_success 是完成率，C_solved 是摊到每个已解决问题上的成本。自测第 3 题会把方案 A 的价格换成 2.20 美元，算法相同；结论仍是 A 更便宜，只是差距变小。</p>
+<h3 id="失败案例现场结果与直觉不一致">失败案例：现场结果与直觉不一致</h3>
+<p>一份公开的客服现场实验（Wang 等，阿里巴巴客服场景，arXiv:2605.14830）报告了一个结果。在 AI 适用的会话上，平均处理时长下降，客户评分也下降。</p>
+<p>评估客服系统时，要同时看处理时长和客户评分。</p>
+<p>另一项是 METR 在 2025 年 7 月发布的随机对照研究。16 位有经验的开源开发者，在自己熟悉的成熟开源项目里完成 246 个任务。使用 2025 年初的 AI 工具时，平均完成时间多出 19%。</p>
+<p>还有一类失败容易被分数掩盖：拒绝本身有对有错。系统拒绝一个其实能完成的任务，是错误拒绝，会被算成失败；系统拒绝一个本该拒绝的任务，是正确拒绝，但如果评分只看「有没有完成」，也会被算成失败。单看通过率分不清「正确拒绝」和「错误拒绝」，所以人工抽查要覆盖被拒绝的样本和被算作成功的样本。</p>
+<h2 id="成本与限制">成本与限制</h2>
+<p>这套评估的维护成本很高。固定用例要跟着服务契约更新，基准要跟着环境版本更新，评分规则还会随业务定义变化。一次端到端评估要跑完整轨迹，任务数和轮数一多，评估账单也会先于结论到来。</p>
+<p>数字要按分母读。同一份运行轨迹里，按调用、按任务、按用户三种分母能算出三个完成率，对外只报一个容易误导。</p>
+<p>安全用例要单独维护。注入语句会随模型更新失效，模型更新后要补充新的攻击用例。</p>
+<h2 id="自测">自测</h2>
+<ol><li>100 次机会中提议正确 90 次，其中执行正确 81 次。单轮执行准确率与端到端完成率各是多少？</li><li>300 个任务，开技能通过 231 个、关技能通过 195 个，提升多少个百分点？这个差值能证明什么、不能证明什么？</li><li>方案 A 每次 2.20 美元、完成率 40%，方案 B 每次 1.80 美元、完成率 30%。按每个已解决的问题算，哪个更便宜？</li><li>安全评估为什么要同时报效用保留率和攻击成功率？</li></ol>
+<h2 id="来源">来源</h2>
+<ul><li><a href="https://arxiv.org/abs/2605.14830" rel="noreferrer">Wang et al., Agentic AI and Human-in-the-Loop Interventions: Field Experimental Evidence from Alibaba's Customer Service Operations</a></li><li><a href="https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/" rel="noreferrer">METR, Early-2025 AI experienced open-source developer study, 2025-07-10</a></li><li><a href="https://arxiv.org/abs/2308.03688" rel="noreferrer">交互环境中的智能体评估</a>。</li></ul>
+    </div>
+    <footer class="chapter-foot">
+      <p class="updated">最近更新 2026-11-14</p>
+      <nav class="chapter-nav" aria-label="章节导航">
+  <a class="nav-prev" href="ch-observability.html"><small>上一章</small><span>可观测性与实验设计</span></a>
+  <a class="nav-next" href="ch-self-improvement.html"><small>下一章</small><span>自改进与评估器的不可编辑面</span></a>
+</nav>
+    </footer>
+  </article>
+</div>
+</main>
+<footer class="site-foot">
+  <p>最近更新 2026-11-14</p>
+</footer>
+<svg class="rough-defs" width="0" height="0" aria-hidden="true">
+  <defs>
+    <filter id="sketch-strong" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="sketch-rough" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="9" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+<script src="assets/learn-v3.js?v=87b426c0" defer></script>
+<script src="assets/tips.js" defer></script>
+</body>
+</html>
